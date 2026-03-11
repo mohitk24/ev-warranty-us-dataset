@@ -1,20 +1,12 @@
 # 🔋 US Battery Electric Vehicles Dataset
-US Electric Vehicle Battery Warranty &amp; Specifications Database (2010–2025)
 
-A structured, source-cited dataset of battery warranty terms and technical 
-specifications for electric vehicles sold in the United States — compiled to 
-make information that is normally scattered across dozens of manufacturer 
-websites accessible in a single, analysis-ready format.
+A structured, source-cited dataset of battery warranty terms and technical  specifications for electric vehicles sold in the United States from 2010 to 2015 — compiled to make information that is normally scattered across dozens of manufacturer websites accessible in a single, analysis-ready format.
 
 ---
 
 ## 📖 Overview
 
-This dataset covers **1,117 model-year entries** from **34 manufacturers** across 
-model years **2010 to 2025**, including both Battery Electric Vehicles (BEV) and 
-Plug-in Hybrid Electric Vehicles (PHEV). Every warranty figure is traceable back 
-to an official manufacturer source or a verified technical reference, with URLs 
-included directly in the dataset for transparency and reproducibility.
+This dataset covers **1,117 model-year entries** from **34 Original Equipment Manufacturers** across model years **2010 to 2025**, including Battery Electric Vehicles (BEV). Every warranty figure is traceable back to an official manufacturer source or a verified technical reference, with URLs included directly in the dataset for transparency and reproducibility.
 
 ---
 
@@ -30,21 +22,21 @@ included directly in the dataset for transparency and reproducibility.
 
 | Column | Description |
 |--------|-------------|
-| `Manufacturer` | Brand name (e.g., Tesla, Ford, BMW) |
-| `EV Model` | Model name |
-| `Model Version` | Trim or variant |
-| `Wheel-Drive` | Rear / Front / All (AWD) |
-| `EV Type` | BEV (Battery Electric) or PHEV (Plug-in Hybrid) |
-| `EV Year` | Model year (2010–2025) |
+| `OEM` | Vehicle manufacturer name (e.g., Tesla, Ford, BMW) |
+| `EV model` | Model name |
+| `Model version` | Trim or variant name |
+| `Drivetrain` | Rear / Front / All (AWD) |
+| `EV type` | BEV (Battery Electric) |
+| `EV year` | Model year (2010–2025) |
 | `Warranty - length in years` | Duration of the battery warranty |
 | `Warranty - battery health/capacity retention` | Minimum retained capacity guaranteed (%) |
 | `Warranty - mileage` | Mileage cap for warranty coverage |
-| `Battery Chemistry` | Cell chemistry type — NMC, LFP, NCA, NCMA, or LMO |
-| `Battery capacity (kWh)` | Total (gross) battery pack capacity |
-| `Useable capacity (kWh)` | Usable energy capacity — some missing values for earlier years |
-| `Charge Power max (kW)` | Maximum DC fast-charge rate supported |
-| `Battery Warranty Sources` | URL to the official manufacturer warranty page |
-| `Chemistry Sources` | URL to the technical reference for battery chemistry |
+| `Battery warranty sources` | URL to the official manufacturer warranty page |
+| `Battery chemistry` | Cell chemistry type — NMC, LFP, NCA, or NCMA |
+| `Chemistry sources` | URL to the technical reference for battery chemistry |
+| `Battery capacity` | Total/gross battery pack capacity (in kWh) |
+| `Useable capacity` | Usable energy capacity — some missing values for earlier years (in kWh) |
+| `Charge Power max` | Maximum DC fast-charge rate supported (in kW) |
 
 > ⚠️ **Note:** The `Features` column is sparsely populated and may be safely 
 > dropped for most analyses. Usable capacity values have some missing entries, 
@@ -55,12 +47,8 @@ included directly in the dataset for transparency and reproducibility.
 
 ## 💡 Use Cases
 
-This dataset is well-suited for a wide range of analytical, research, and 
-educational purposes, including cross-brand warranty comparison, studying how 
-battery chemistry correlates with warranty generosity, analyzing BEV vs. PHEV 
-coverage differences, tracking how EV specifications have evolved over the 
-15-year span, building EV recommendation tools or buyer guides, and supporting 
-academic or policy research on EV market maturity.
+This dataset is well-suited for a wide range of analytical, research, and  educational purposes, including cross-brand warranty comparison, studying how 
+battery chemistry correlates with warranty generosity, tracking how EV specifications have evolved over the 15-year span, building EV recommendation tools or buyer guides, and supporting academic or policy research on EV market maturity.
 
 ---
 
@@ -76,23 +64,16 @@ Volvo · smart
 
 ## 🔍 Data Sources
 
-All data was compiled from official manufacturer warranty pages and Wikipedia 
-technical references. Source URLs are included per row in the dataset for 
-independent verification.
+All data was compiled from official manufacturer warranty pages and Wikipedia technical references. Source URLs are included per row in the dataset for independent verification.
 
 ---
 
 ## 📜 License
 
-This dataset is released under the
-[Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
-license. You are free to share and adapt it for any purpose, provided you give 
-appropriate credit to the original author.
+This dataset is released under the [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/) license. You are free to share and adapt it for any purpose, provided you give appropriate credit to the original author.
 
 ---
 
 ## 🙌 Acknowledgements
 
-If you use this dataset in your work, a citation or a link back to this 
-repository is appreciated. Contributions, corrections, and pull requests 
-are welcome!
+If you use this dataset in your work, a citation or a link back to this repository is appreciated. Contributions, corrections, and pull requests are welcome!
