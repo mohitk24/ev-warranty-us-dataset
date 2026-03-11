@@ -1,0 +1,134 @@
+---
+title: "EV"
+author: "Mohit Karangutkar"
+format: html
+editor: visual
+---
+
+```{r, eval=FALSE}
+ev_data <- read_csv("EV Warranty US.csv", show_col_types=FALSE)
+```
+
+```{r, eval=FALSE}
+summary(ev_data)
+```
+
+```{r, eval=FALSE}
+# Convert miles and battery retention into numeric
+ev_data$miles <- as.numeric(gsub(",", "", ev_data$miles))
+ev_data$battery_retention <- as.numeric(gsub("%", "", ev_data$battery_retention))/100
+
+# Remove rows with null miles and battery retention values
+ev_data_m <- ev_data[!is.na(ev_data$miles),]
+ev_data_br <- ev_data[!is.na(ev_data$battery_retention),]
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data_m, aes(ev_year, miles, size=0.01, alpha=0.5)) +
+  geom_point(aes(color=OEM)) +
+  facet_wrap(~OEM) +
+  labs(title="Battery warranty mileage over time",
+       x="Time period (years)", y="Battery warranty mileage") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+```
+
+```{r, eval=FALSE}
+tesla_data <- ev_data_m[ev_data_m$OEM=="Tesla",]
+ggplot(tesla_data, aes(ev_year, miles, color=battery_chemistry,
+                       alpha=0.5, size=0.1)) +
+  geom_jitter(height=0, width=0.3) +
+  scale_x_continuous(breaks=seq(2012, 2025, by=1)) +
+  labs(title="Tesla battery warranty mileage",
+       x="Time period (years)", y="Battery warranty mileage") +
+  theme_minimal()
+```
+
+```{r, eval=FALSE}
+rivian_data <- ev_data_m[ev_data_m$OEM=="Rivian",]
+ggplot(rivian_data, aes(ev_year, miles, color=battery_chemistry,
+                       alpha=0.5, size=0.05)) +
+  geom_jitter(height=0, width=0.05) +
+  scale_x_continuous(breaks=seq(2021, 2025, by=1)) +
+  scale_y_continuous(breaks=seq(120000, 180000, by=10000)) +
+  labs(title="Rivian battery warranty mileage",
+       x="Time period (years)", y="Battery warranty mileage") +
+  theme_minimal()
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data, aes(battery_chemistry, OEM, color=battery_chemistry,
+                    size=0.1)) +
+  geom_point() +
+  labs(title="Battery chemistry for each manufacturer",
+       x="Battery chemistry", y="EV Manufacturer") +
+  theme_minimal()
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data_br, aes(OEM, battery_retention,size=0.1,
+                       color=battery_chemistry, alpha=0.5)) +
+  geom_jitter(height=0, width=0.25) +
+  labs(title="Battery retention for each manufacturer",
+       x="EV Manufacturer", y="Battery retention") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data_m, aes(OEM, years, alpha=0.7, size=0.5, color=years)) +
+  geom_jitter(height=0, width=0.2) +
+  labs(title="Battery warranty years for each manufacturer",
+       x="EV Manufacturer", y="Battery warranty years") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data_m, aes(OEM, miles, color=OEM, fill=OEM)) +
+  geom_boxplot() +
+  scale_y_continuous(breaks=seq(60000, 180000, by=10000)) +
+  labs(title="Battery warranty mileage distribution",
+       x="EV Manufacturer", y="Battery warranty mileage") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data_br, aes(x=battery_chemistry, y=battery_retention, 
+                       color=battery_chemistry, size=0.1, alpha=0.5)) +
+  geom_jitter(height=0, width=0.1) +
+  labs(title="Battery chemistry vs. Battery retention",
+       x="Battery chemistry", y="Battery retention") +
+  theme_minimal()
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data_br, aes(battery_chemistry, fill=battery_chemistry)) +
+  geom_bar() +
+  facet_wrap(~OEM, scale="free_y") +
+  labs(title="EV Count by battery chemistry",
+       x="Battery chemistry", y=NULL) +
+  theme_minimal()
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data, aes(OEM, ev_year, fill=OEM)) +
+  geom_boxplot(outlier.shape = NA) +
+  scale_y_continuous(breaks=seq(2010, 2025, by=1)) +
+  labs(title="Time period for each EV in US",
+       x="EV Manufacturer", y="Time period (years)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+```
+
+```{r, eval=FALSE}
+ggplot(ev_data_m, aes(x=ev_year)) +
+  geom_line(aes(y=total_capacity, color="total_capacity")) +
+  geom_line(aes(y=usable_capacity, color="usable_capacity")) +
+  facet_wrap(~OEM) +
+  labs(title="Battery capacity of each manufacturers",
+       x="Time period (years)", y="Battery capacity (kWh)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle=90, hjust=1))
+```
