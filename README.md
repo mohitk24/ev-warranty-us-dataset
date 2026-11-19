@@ -1,118 +1,155 @@
 <div align="center">
 
-# 🩸 Microneedle Array Optimizer
+# 🎵 Music Recommendation System
 
-**Find the needle count, needle radius, needle length, and array radius that maximize blood flow through a circular microneedle array, then explore why.**
+**Discover music you'll love - powered by deep audio embeddings and semantic vector search**
 
-Built on a Hagen-Poiseuille flow model with skin-penetration penalties, solved with SciPy's **SLSQP** and **trust-constr**, and wrapped in an interactive Streamlit dashboard.
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?style=flat&logo=pytorch&logoColor=white)
+![HuggingFace](https://img.shields.io/badge/HuggingFace-MERT-FFD21E?style=flat&logo=huggingface&logoColor=black)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.16x-009688?style=flat&logo=fastapi&logoColor=white)
+![Gradio](https://img.shields.io/badge/Gradio-6.x-FF7C00?style=flat&logo=gradio&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat&logo=docker&logoColor=white)
 
-![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
-![SciPy](https://img.shields.io/badge/SciPy-SLSQP%20%7C%20trust--constr-8CAAE6?logo=scipy&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-Interactive%20UI-FF4B4B?logo=streamlit&logoColor=white)
-![Plotly](https://img.shields.io/badge/Plotly-Visualizations-3F4F75?logo=plotly&logoColor=white)
-
-[Overview](#-overview) · [How It Works](#-how-it-works) · [Key Features](#-key-features) · [Project Structure](#-project-structure) · [Use Cases](#-use-cases)
+[Overview](#-project-overview) · [How It Works](#-how-it-works) · [Features](#-key-features) · [Structure](#-project-structure) · [Quickstart](#-quickstart) · [Use Cases](#-use-cases)
 
 </div>
 
 ---
 
-## 📖 Overview
+## 📌 Project Overview
 
-A microneedle array draws blood through tiny hollow needles, and every design choice pulls against another. Wider, shorter needles flow faster (flow scales as **R⁴/L**), but packing more needles into a small footprint starves each one of nearby tissue, and spreading the same insertion force across too many needles leaves each tip too blunt to puncture skin (the *bed-of-nails effect*). Too few needles, and total flow is limited by count alone.
+The **Music Recommendation System** ingests raw audio files, converts them into high-dimensional **semantic embeddings** using a state-of-the-art music foundation model, stores them in a persistent **vector database**, and surfaces the most acoustically similar tracks — all through a clean browser UI.
 
-This project turns that trade-off into a **constrained optimization** problem. For every needle count from **2 to 15**, it finds the best needle radius, needle length, and array radius, then compares the results to reveal the optimal count. An **interactive dashboard** lets you change the physics and design limits live and see how the answer moves, which is much faster than editing code and rerunning scripts.
+Unlike metadata-based recommenders that rely on genre tags or play-count statistics, this system works at the signal level: it encodes the actual audio waveform into a 1024-dimensional representation that captures timbre, rhythm, and harmonic structure. Similarity is then measured by **cosine similarity** in embedding space, with no manual feature engineering required.
 
+> 💡 **Tip:** The more songs are indexed, the better the recommendations.
 ---
 
-## 🧠 How It Works
+## ⚙️ How It Works
 
-### 1. Mathematical model
+### System Architecture
 
-Total flow is Hagen-Poiseuille flow through each needle, scaled by four multipliers between 0 and 1:
+```mermaid
+flowchart LR
+    A["Audio Library\n(songs/ + Spotify/YouTube)"] --> B["app.py\n(MERT-v1-330M + PlaylistCNN)"]
+    B --> C["data/\n(ChromaDB + model.pt)"]
+    C --> D["backend.py\n(FastAPI REST API)"]
+    D <--> E["frontend.py\n(Gradio UI)"]
+    F["download.py\n(spotdl / yt-dlp)"] --> A
+    G["Docker\n(python:3.12-slim)"] --> D
+    G --> E
+    E --> H["Hugging Face\nDeployment"]
+```[cite: 2, 3, 4, 5, 6, 7, 11, 14]
 
-$$
-Q = n \cdot \frac{\pi R^4 \,\Delta P}{8 \mu L} \cdot f_{\text{vascular}} \cdot f_{\text{puncture}} \cdot f_{\text{buckle}} \cdot f_{\text{tent}}
-$$
 
-| Multiplier | Physical effect | What it penalizes |
-|---|---|---|
-| `f_vascular` | Less tissue per needle lowers the effective driving pressure | Crowded arrays |
-| `f_puncture` | Insertion force is shared across needles, so tip stress drops below the skin-puncture stress | **Too many** needles |
-| `f_buckle` | Per-needle load vs. critical buckling load (Euler, silicon) | Thin, long needles |
-| `f_tent` | Large arrays stretch skin instead of piercing it | Large array radius |
+Audio Files → Feature Extraction → Semantic Embeddings → Vector DB → Cosine Search → Recommendations
+```
 
-The puncture and buckling terms use smooth logistic "gates" (steepness is adjustable), which keeps the objective differentiable for gradient-based solvers.
+### Step-by-step pipeline
 
-### 2. Constrained optimization
+**1. Audio ingestion**
+Songs are read from the `songs/` folder (MP3, M4A, WAV, FLAC, OGG). `download.py` can populate that folder directly from a Spotify playlist URL (via `spotdl`) or a YouTube playlist URL (via `yt-dlp`), with parallel workers and automatic deduplication by title.
 
-The needle count is an integer, so the problem is mixed-integer. With only 14 candidates, the code uses **exact enumeration**: for each `n`, it solves a small continuous problem and keeps the best.
+**2. Audio preprocessing**
+Each file is resampled to **24 kHz mono** using `librosa`. Three non-overlapping 15-second clips are extracted — from the start, middle, and end of the track — giving the model a balanced view of the full song. Files shorter than 45 seconds are zero-padded.
 
-- **Variables:** needle radius `R`, needle length `L`, array radius.
-- **Objective:** maximize total flow rate.
-- **Bounds:** user-adjustable limits on all three variables.
-- **Spacing constraint:** neighboring needles on the circle must keep a minimum gap, so the chord distance `2·a·sin(π/n)` must be at least `2R + clearance`.
-- **Conditioning:** variables are normalized to [0, 1] so both solvers behave well despite micrometer-to-millimeter scale differences.
+**3. Audio feature extraction with MERT**
+Each clip is passed through **MERT-v1-330M** (`m-a-p/MERT-v1-330M`), a 330-million-parameter music encoder pre-trained with **masked acoustic modelling**. The model is a stack of Transformer layers that perform **representation learning** directly on the raw waveform, with no hand-crafted spectral features needed.
 
-### 3. Multi-start sweep and solver comparison
+**4. Embedding aggregation**
+Hidden states from layers **12, 16, and 18** are averaged across time and then averaged together, yielding a single **1024-dimensional semantic embedding** per song. Using multiple mid-to-late layers balances local acoustic detail with high-level musical structure.
 
-| Solver | Type | Role |
-|---|---|---|
-| `SLSQP` | Sequential least-squares quadratic programming | Fast; default workhorse |
-| `trust-constr` | Trust-region constrained method | Independent cross-check |
+**5. Vector database upsert**
+Embeddings are written to a **ChromaDB** `PersistentClient` collection (`"songs"`, cosine space) in chunks of 16, with an overlap-safe upsert strategy that acts as a resumable checkpoint. A `ThreadPoolExecutor` with 4 workers decodes the next chunk on CPU while the GPU embeds the current one, keeping both resources busy. Songs removed from `songs/` are automatically deleted from the collection.
 
-The app reports whether both solvers **agree** on the optimum (same `n`, flow within 0.1%).
+**6. Playlist-aware classification (optional)**
+When songs are organised into per-playlist sub-folders, a **`PlaylistCNN`** trains on the stored embeddings. The architecture:
 
-Each solve runs from **three starting points** to guard against local optima, and only feasible results are kept. The whole sweep runs with both **SLSQP** and **trust-constr**, and the dashboard reports whether the two solvers agree on the optimum.
-
-With default settings, both solvers find **6 needles** (≈ 62.8 nL/s), with flow rising from 2 to 6 and falling after 7.
-
-> 💡 **Tip:** Flow scales as R⁴/L, so the optimizer pushes radius to its upper limit and length to its lower limit. The dashboard flags when a variable sits on a bound, which signals that you should widen the limits or add a physical penalty for extreme geometries.
-
----
-
-## ⚡ Key Features
-
-- **Dual-solver numerical optimization:** SLSQP and trust-constr side by side, with an automatic agreement check.
-- **Interactive dashboard:** sliders for insertion force, puncture stress, design limits, minimum gap, and advanced physics, with one-click reset.
-- **Explainable results:** a "Why it peaks" view plots each penalty multiplier against needle count, so you can see which physics bends the curve.
-- **Sensitivity analysis:** a parameter sweep over insertion force shows how stable the optimal needle count is.
-- **Data visualization and export:** Plotly charts with hover and zoom, a sortable results table, and CSV download.
-- **Edge-case handling:** infeasible settings produce a clear message instead of a crash, needle counts with no feasible design are reported, and solver warnings are suppressed.
-- **Performance and caching:** results are cached with `st.cache_data`, so moving unrelated widgets doesn't re-run the solvers. A full SLSQP sweep takes roughly 0.1 s, and trust-constr about 3 s.
-
----
-
-## 📁 Project Structure
-
-| File | Role |
+| Layer | Config |
 |---|---|
-| `app.py` | Core model: physics equations and multipliers, `Params` dataclass, spacing constraint, SLSQP / trust-constr routines, multi-start search, and the needle-count sweep. Also runs as a command-line report. |
-| `frontend.py` | Streamlit dashboard: sidebar controls, result cards, flow-vs-needles chart, design table with CSV export, penalty breakdown, force sensitivity analysis, and model notes. Imports the model from `app.py`. |
-| `requirements.txt` | Pinned dependencies for **reproducibility**: `pandas`, `numpy`, `scipy`, `plotly`, `streamlit`. |
+| `Conv1d` (1→32) | kernel 9, stride 4 |
+| `Conv1d` (32→64) | kernel 9, stride 4 |
+| `Conv1d` (64→128) | kernel 9, stride 4 |
+| `AdaptiveAvgPool1d(1)` | global average |
+| `Dropout(0.3)` + `Linear(128, C)` | output classes |
+
+Training uses **AdamW** (lr 1e-3), **CrossEntropyLoss**, batch size 16, up to 40 epochs, with **early stopping** (patience 5) on validation loss and an 80/20 stratified split. The best checkpoint is saved to `data/model.pt`. If all songs share the same flat `songs/` folder (one label), CNN training is skipped automatically.
+
+> ⚠️ **Note:** Recommendations are always served by ChromaDB cosine search — the CNN is a playlist classifier, not the retrieval engine.
+
+**7. REST API + interactive UI**
+A **FastAPI** backend exposes the full **inference pipeline** over HTTP. A **Gradio** frontend renders a searchable dropdown, a recommendation slider, a results table with similarity scores, and an in-browser audio preview — no separate media player required.
 
 ---
 
-## 💡 Use Cases
+## ✨ Key Features
 
-- **Design exploration:** quickly test how insertion force, skin stiffness (puncture stress), and footprint limits shift the best needle count before committing to fabrication.
-- **Teaching and communication:** show students or collaborators how competing physical effects produce an interior optimum, using the penalty-breakdown view.
-- **Solver benchmarking:** compare SLSQP and trust-constr on a small nonlinear problem with bounds and a nonlinear inequality constraint.
-- **Next-step extensions:** replace the calibrated force with measured skin-puncture data, add a penalty for extreme radius or length so optima land inside the bounds, add a mechanism that penalizes too few needles (such as skin draping between widely spaced needles), or add pain and tissue-damage limits to the objective.
+| Feature | Detail |
+|---|---|
+| 🎙️ **Deep audio embeddings** | MERT-v1-330M; 1024-dim vectors from raw waveforms |
+| 🗄️ **Persistent vector database** | ChromaDB with cosine HNSW index; survives restarts |
+| ⚡ **Incremental indexing** | Chunk-level upsert; resumes after interruption |
+| 🔀 **Parallel ingestion** | ThreadPoolExecutor: decode next / embed current |
+| 🎛️ **1D CNN classifier** | Playlist-label training with early stopping; auto-skipped when flat |
+| 🌐 **REST API** | FastAPI with asynchronous background workers for index + download jobs |
+| 🖥️ **Browser UI** | Gradio; live search, ✕ clear, ▶ audio preview, status polling |
+| 📥 **Playlist ingestion** | Spotify via `spotdl`; YouTube via `yt-dlp`; title-based dedup |
+| 🐳 **Containerised** | Single Docker image; MERT weights baked in; CPU-only PyTorch |
+| ☁️ **Cloud-ready** | Hugging Face Docker Space deployment with pre-built `data/chroma` |
 
 ---
 
-## ⚠️ Assumptions & Edge Cases
+## 🗂️ Project Structure
 
-- **Infeasible bounds:** if the array is too small for the needle radius plus clearance, the app reports "No feasible design" and suggests widening limits.
-- **Solver disagreement:** flagged in the UI. Inspect the design table and the factor chart before trusting either result.
-- **Edge of the needle range:** at high insertion force the optimum can sit at n = 15, so the true peak may lie beyond the tested range.
-- **Calibration:** the force and puncture-stress defaults are placeholders, not measured skin data.
+```
+Music-Recommendation-System/
+│
+├── songs/                  # Audio library (MP3, M4A, WAV, FLAC, OGG)
+│   └── PlaylistA/          # Optional: per-playlist sub-folders for CNN training
+│       └── track.mp3
+│
+├── data/                   # Generated at runtime
+│   ├── chroma/             # ChromaDB persistent store (vector embeddings)
+│   └── model.pt            # Best PlaylistCNN checkpoint (when trained)
+│
+├── app.py                  # Core pipeline: embedding, indexing, ChromaDB, CNN, recommendations
+├── backend.py              # FastAPI server — REST endpoints, background job queue
+├── frontend.py             # Gradio UI — search, recommend, download, audio preview
+├── download.py             # Playlist ingestion — Spotify (spotdl) + YouTube (yt-dlp)
+├── predict.py              # CLI — keyword search → pick a song → top-5 results
+│
+├── requirements.txt        # Pinned dependencies
+├── Dockerfile              # python:3.12-slim; MERT baked in; CPU torch
+├── .dockerignore           # Excludes songs/, *.mp3, data/*.npz, .venv/
+└── docker-compose.yml      # Volume mounts for songs/ and data/; port 7860
+```
+
+| File | Responsibility |
+|---|---|
+| `app.py` | Audio loading, MERT inference, ChromaDB upsert/query, CNN training, `recommend()` |
+| `backend.py` | HTTP layer; `/recommend`, `/index`, `/download`, `/audio`, `/songs` endpoints; job status |
+| `frontend.py` | Gradio tabs; real-time dropdown search; results table; ▶ play; status polling every 3 s |
+| `download.py` | `spotdl save` + chunked download; `yt-dlp` flat playlist extract; parallel workers; dedup |
+| `predict.py` | Interactive CLI; calls `recommend()` directly; no server required |
 
 ---
 
-## 📄 License & Acknowledgements
+## 🔭 Use Cases
 
-Released under the **MIT License** (placeholder: add a `LICENSE` file and update the author name and year).
+- **Personal music discovery** — index your entire local library and explore it by acoustic similarity rather than genre tags.
+- **Playlist curation** — seed a recommendation with one track and build a cohesive set for DJ sets or workout playlists.
+- **Audio dataset exploration** — use the vector database as a semantic index to audit large collections for near-duplicates or outliers.
+- **Retrieval-augmented pipelines** — expose the `/recommend` endpoint to downstream services that need audio-conditioned retrieval (e.g., video background music matching).
+- **Transfer learning research** — swap the MERT backbone for any Hugging Face audio encoder and benchmark representation learning quality via retrieval metrics.
+- **Containerisation & reproducibility** — the Docker image ships with model weights baked in and a `--no-install-recommends` base, making it easy to reproduce the full inference pipeline on any machine.
 
-Built with [NumPy](https://numpy.org/), [SciPy](https://scipy.org/), [pandas](https://pandas.pydata.org/), [Plotly](https://plotly.com/python/), and [Streamlit](https://streamlit.io/). The flow model is based on the classical **Hagen-Poiseuille** equation for laminar flow in a cylindrical channel.
+---
+
+## 📄 License
+
+Distributed under the [MIT License](LICENSE).
+
+**Built with** · [MERT](https://huggingface.co/m-a-p/MERT-v1-330M) · [ChromaDB](https://www.trychroma.com) · [FastAPI](https://fastapi.tiangolo.com) · [Gradio](https://www.gradio.app) · [spotdl](https://spotdl.readthedocs.io) · [yt-dlp](https://github.com/yt-dlp/yt-dlp) · [Docker](https://www.docker.com)
+
+</div>
