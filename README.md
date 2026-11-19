@@ -5,39 +5,39 @@
 **Discover music you'll love - powered by deep audio embeddings and semantic vector search**
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?style=flat&logo=pytorch&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.15-EE4C2C?style=flat&logo=pytorch&logoColor=white)
 ![HuggingFace](https://img.shields.io/badge/HuggingFace-MERT-FFD21E?style=flat&logo=huggingface&logoColor=black)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.16x-009688?style=flat&logo=fastapi&logoColor=white)
-![Gradio](https://img.shields.io/badge/Gradio-6.x-FF7C00?style=flat&logo=gradio&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat&logo=docker&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.162.5-009688?style=flat&logo=fastapi&logoColor=white)
+![Gradio](https://img.shields.io/badge/Gradio-6.31-FF7C00?style=flat&logo=gradio&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Container-2496ED?style=flat&logo=docker&logoColor=white)
 
-[Overview](#-project-overview) · [How It Works](#-how-it-works) · [Features](#-key-features) · [Structure](#-project-structure) · [Quickstart](#-quickstart) · [Use Cases](#-use-cases)
+[Overview](#-project-overview) · [How It Works](#-how-it-works) · [Features](#-key-features) · [Structure](#-project-structure) · [Use Cases](#-use-cases)
 
 </div>
 
 ---
 
-## 📌 Project Overview
+## 📖 Overview
 
-The **Music Recommendation System** ingests raw audio files, converts them into high-dimensional **semantic embeddings** using a state-of-the-art music foundation model, stores them in a persistent **vector database**, and surfaces the most acoustically similar tracks — all through a clean browser UI.
+The **Music Recommendation System** ingests raw audio files, converts them into high-dimensional **semantic embeddings** using a state-of-the-art music foundation model, stores them in a persistent **vector database**, and surfaces the most acoustically similar tracks - all through a clean browser UI.
 
 Unlike metadata-based recommenders that rely on genre tags or play-count statistics, this system works at the signal level: it encodes the actual audio waveform into a 1024-dimensional representation that captures timbre, rhythm, and harmonic structure. Similarity is then measured by **cosine similarity** in embedding space, with no manual feature engineering required.
 
 > 💡 **Tip:** The more songs are indexed, the better the recommendations.
 ---
 
-## ⚙️ How It Works
+## 🧠 How It Works
 
 ### System Architecture
 
 ```mermaid
 flowchart LR
-    A["Audio Library\n(songs/ + Spotify/YouTube)"] --> B["app.py\n(MERT-v1-330M + PlaylistCNN)"]
-    B --> C["data/\n(ChromaDB + model.pt)"]
-    C --> D["backend.py\n(FastAPI REST API)"]
-    D <--> E["frontend.py\n(Gradio UI)"]
-    F["download.py\n(spotdl / yt-dlp)"] --> A
-    G["Docker\n(python:3.12-slim)"] --> D
+    A["(Audio Library\n(Spotify + YouTube))"] --> B["app.py"]
+    B --> C["(Vector Database\n(ChromaDB))"]
+    C --> D["backend.py\nFastAPI"]
+    D <--> E["frontend.py\nGradio"]
+    F["download.py"] --> A
+    G["Docker"] --> D
     G --> E
     E --> H["Hugging Face\nDeployment"]
 ```
@@ -75,7 +75,7 @@ Training uses **AdamW** (lr 1e-3), **CrossEntropyLoss**, batch size 16, up to 40
 > ⚠️ **Note:** Recommendations are always served by ChromaDB cosine search — the CNN is a playlist classifier, not the retrieval engine.
 
 **7. REST API + interactive UI**
-A **FastAPI** backend exposes the full **inference pipeline** over HTTP. A **Gradio** frontend renders a searchable dropdown, a recommendation slider, a results table with similarity scores, and an in-browser audio preview — no separate media player required.
+A **FastAPI** backend exposes the full **inference pipeline** over HTTP. A **Gradio** frontend renders a searchable dropdown, a recommendation slider, a results table with similarity scores, and an in-browser audio preview - no separate media player required.
 
 ---
 
@@ -110,10 +110,10 @@ Music-Recommendation-System/
 │   └── model.pt            # Best PlaylistCNN checkpoint (when trained)
 │
 ├── app.py                  # Core pipeline: embedding, indexing, ChromaDB, CNN, recommendations
-├── backend.py              # FastAPI server — REST endpoints, background job queue
-├── frontend.py             # Gradio UI — search, recommend, download, audio preview
-├── download.py             # Playlist ingestion — Spotify (spotdl) + YouTube (yt-dlp)
-├── predict.py              # CLI — keyword search → pick a song → top-5 results
+├── backend.py              # FastAPI server - REST endpoints, background job queue
+├── frontend.py             # Gradio UI - search, recommend, download, audio preview
+├── download.py             # Playlist ingestion - Spotify (spotdl) + YouTube (yt-dlp)
+├── predict.py              # CLI - keyword search → pick a song → top-5 results
 │
 ├── requirements.txt        # Pinned dependencies
 ├── Dockerfile              # python:3.12-slim; MERT baked in; CPU torch
@@ -133,12 +133,12 @@ Music-Recommendation-System/
 
 ## 🔭 Use Cases
 
-- **Personal music discovery** — index your entire local library and explore it by acoustic similarity rather than genre tags.
-- **Playlist curation** — seed a recommendation with one track and build a cohesive set for DJ sets or workout playlists.
-- **Audio dataset exploration** — use the vector database as a semantic index to audit large collections for near-duplicates or outliers.
-- **Retrieval-augmented pipelines** — expose the `/recommend` endpoint to downstream services that need audio-conditioned retrieval (e.g., video background music matching).
-- **Transfer learning research** — swap the MERT backbone for any Hugging Face audio encoder and benchmark representation learning quality via retrieval metrics.
-- **Containerisation & reproducibility** — the Docker image ships with model weights baked in and a `--no-install-recommends` base, making it easy to reproduce the full inference pipeline on any machine.
+- **Personal music discovery** - index your entire local library and explore it by acoustic similarity rather than genre tags.
+- **Playlist curation** - seed a recommendation with one track and build a cohesive set for DJ sets or workout playlists.
+- **Audio dataset exploration** - use the vector database as a semantic index to audit large collections for near-duplicates or outliers.
+- **Retrieval-augmented pipelines** - expose the `/recommend` endpoint to downstream services that need audio-conditioned retrieval (e.g., video background music matching).
+- **Transfer learning research** - swap the MERT backbone for any Hugging Face audio encoder and benchmark representation learning quality via retrieval metrics.
+- **Containerisation & reproducibility** - the Docker image ships with model weights baked in and a `--no-install-recommends` base, making it easy to reproduce the full inference pipeline on any machine.
 
 ---
 
