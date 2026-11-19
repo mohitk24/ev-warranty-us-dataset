@@ -26,26 +26,18 @@ Language learners typically juggle five or six disconnected tools — a chatbot 
 
 ```mermaid
 flowchart LR
-    User["👤 Learner\n(browser)"]
-    FE["frontend.py\nGradio · 5 tabs"]
-    BE["backend.py\nFastAPI"]
-    APP["app.py\nOrchestrator"]
-    CONV["conversation.py\nSTT · LLM · TTS · OCR · ChromaDB"]
-    FLASH["flashcards.py\nSM-2 · Decks · Quiz"]
-    HW["handwriting.py\nKeras CNN"]
-    CFG["configuration.py\nSettings"]
-    DATA[("data/\naudio · chroma\ndecks · models")]
-
-    User <--> FE
-    FE <--> BE
-    BE --> APP
-    APP --> CONV
-    APP --> FLASH
-    APP --> HW
-    APP --> CFG
-    CONV --> DATA
-    FLASH --> DATA
-    HW --> DATA
+    DATA[("data/\naudio · chroma\ndecks · models")] --> CFG["configuration.py\nSettings"]
+    CFG --> CONV["conversation.py\nSTT · LLM · TTS · OCR · ChromaDB"]
+    CFG --> FLASH["flashcards.py\nSM-2 · Decks · Quiz"]
+    CFG --> HW["handwriting.py\nKeras CNN"]
+    CONV --> APP["app.py\nOrchestrator"]
+    FLASH --> APP
+    HW --> APP
+    APP --> BE["backend.py\nFastAPI"]
+    BE <--> FE["frontend.py\nGradio · 5 tabs"]
+    DOC["Docker"] --> BE
+    DOC --> FE
+    FE --> HF["Hugging Face\nDeployment"]
 ```
 
 | Layer | Responsibility |
