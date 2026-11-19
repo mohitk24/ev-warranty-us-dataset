@@ -33,7 +33,7 @@ Unlike metadata-based recommenders that rely on genre tags or play-count statist
 ```mermaid
 flowchart LR
     A["(Audio Library\n(Spotify + YouTube))"] --> B["app.py"]
-    B --> C["(Vector Database\n(ChromaDB))"]
+    B --> C[("Vector Database\n(ChromaDB)")]
     C --> D["backend.py\nFastAPI"]
     D <--> E["frontend.py\nGradio"]
     F["download.py"] --> A
