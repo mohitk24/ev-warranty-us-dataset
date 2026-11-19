@@ -40,10 +40,6 @@ flowchart LR
     G["Docker\n(python:3.12-slim)"] --> D
     G --> E
     E --> H["Hugging Face\nDeployment"]
-```[cite: 2, 3, 4, 5, 6, 7, 11, 14]
-
-
-Audio Files → Feature Extraction → Semantic Embeddings → Vector DB → Cosine Search → Recommendations
 ```
 
 ### Step-by-step pipeline
