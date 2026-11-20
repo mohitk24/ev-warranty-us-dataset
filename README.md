@@ -1,18 +1,17 @@
 <div align="center">
 
-# 🗣️ Multimodal Language Partner
+# 🍽️ Restaurant Review Sentiment Analysis
 
-**One app to converse, listen, read, drill, and write in seven languages - powered by local AI and spaced repetition**
+### Classify any restaurant review as Positive or Negative - from raw text to a production inference API
 
-![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=flat&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?style=flat&logo=fastapi&logoColor=white)
-![Gradio](https://img.shields.io/badge/Gradio-6-FF7C00?style=flat&logo=gradio&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-Transformers-EE4C2C?style=flat&logo=pytorch&logoColor=white)
-![TensorFlow](https://img.shields.io/badge/TensorFlow%2FKeras-CNN-FF6F00?style=flat&logo=tensorflow&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=flat&logo=docker&logoColor=white)
-![HuggingFace](https://img.shields.io/badge/Hugging%20Face-Deployed-FFD21E?style=flat&logo=huggingface&logoColor=black)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9.1-F7931E?logo=scikitlearn&logoColor=white)
+![NLTK](https://img.shields.io/badge/NLTK-3.10.4-154f3c)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.165.0-009688?logo=fastapi&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.67.0-FF4B4B?logo=streamlit&logoColor=white)
+![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Deployed-FFD21E?logo=huggingface&logoColor=black)
 
-[Overview](#-project-overview) · [How It Works](#-how-the-models--pipeline-work) · [Features](#-key-features) · [Structure](#-project-structure) · [Use Cases](#-use-cases--future-extensions)
+[Overview](#-overview) · [How It Works](#-how-it-works) · [Features](#-key-features) · [Structure](#-project-structure) · [Use Cases](#-use-cases--future-extensions)
 
 </div>
 
@@ -20,163 +19,164 @@
 
 ## 📖 Overview
 
-Language learners typically juggle five or six disconnected tools — a chatbot for conversation practice, a voice transcriber, a photo reader for menus and signs, a flashcard app, and a handwriting pad. None of them share context, adapt to the learner's CEFR level, or remember what was discussed yesterday.
+Online restaurant reviews are short, opinionated, and full of negations and slang - making them harder to classify reliably than longer product reviews. Manual triage is impractical at scale, yet a simple keyword search misses phrases like "not good at all" or "won't come back."
 
-**Multimodal Language Partner** collapses that stack into a single containerized application. It pairs a conversational AI partner with speech-to-text, OCR translation, SM-2 spaced-repetition flashcards and quizzes, and a CNN-powered handwriting recognition pad - all running on one port with a persistent vector-store memory that carries context across sessions.
+**Restaurant Review Sentiment Analysis** solves this by combining a carefully tuned NLP preprocessing pipeline with a Multinomial Naïve Bayes classifier, delivered through a FastAPI backend and a Streamlit web app. It classifies any English restaurant review - typed individually or submitted in bulk - as **Positive** or **Negative**, and returns a calibrated confidence score alongside the words that drove the decision.
 
-```mermaid
-flowchart LR
-    DATA[("data/\naudio · chroma\ndecks · models")] --> CFG["configuration.py\nSettings"]
-    CFG --> CONV["conversation.py\nSTT · LLM · TTS · OCR · ChromaDB"]
-    CFG --> FLASH["flashcards.py\nSM-2 · Decks · Quiz"]
-    CFG --> HW["handwriting.py\nKeras CNN"]
-    CONV --> APP["app.py\nOrchestrator"]
-    FLASH --> APP
-    HW --> APP
-    APP --> BE["backend.py\nFastAPI"]
-    BE <--> FE["frontend.py\nGradio · 5 tabs"]
-    DOC["Docker"] --> BE
-    DOC --> FE
-    FE --> HF["Hugging Face\nDeployment"]
-```
-
-| Layer | Responsibility |
-|---|---|
-| **Gradio frontend** | Five-tab browser UI on port 7860; dark CSS; consistent tab sizing |
-| **FastAPI backend** | REST API, `/api/health`, request routing, Pydantic models |
-| **Orchestrator** | `app.py` wires modules together; no UI or HTTP code |
-| **Conversation engine** | Whisper STT, Qwen LLM, gTTS / browser-speech TTS, Tesseract OCR, ChromaDB memory |
-| **Learning tools** | SM-2 flashcard scheduler, deck builder (15 cards/click), adaptive quiz |
-| **Handwriting** | Pre-trained Keras CNN on MNIST & EMNIST balanced; NumPy inference in-process |
-| **Configuration** | Lowercase `cfg.*` settings for data paths, model selection, device flags |
-| **Data volume** | `data/audio`, `data/chroma` (ChromaDB), `data/decks`, `data/models` |
+The dataset comprises **1,000 balanced reviews** (500 positive, 500 negative) averaging 10 words per review. The final model achieves **83% test accuracy** with balanced precision and recall across both classes.
 
 ---
 
-## 🧠 How the Models & Pipeline Work
+## 🧠 How It Works
 
-### 1 · Conversational Generation & CEFR Adaptation
+### System Architecture
 
-User text or transcribed speech is passed to **`Qwen/Qwen2.5-1.5B-Instruct`** (GPU) or **`Qwen/Qwen2.5-0.5B-Instruct`** (CPU), loaded via `torch` and `transformers` with a cache-first HuggingFace loader. A **prompt engineering** layer prepends the learner's target language and CEFR level, constraining generation to vocabulary and grammar appropriate for that level. A **circuit-breaker** wrapper catches model timeouts and falls back to Google Translate for the translation path.
+```mermaid
+flowchart LR
+    A[("Reviews\ndataset (CSV file)")] --> B["app.py"]
+    B --> C["model.joblib"]
+    C --> D["backend.py\nFastAPI"]
+    D <--> E["frontend.py\nStreamlit UI"]
+    E --> F["Hugging Face\nDeployment"]
+```
 
-Conversation turns are stored as **vector embeddings** in a ChromaDB `conversation_memory` collection (cosine distance, persistent on disk under `data/chroma`). **Semantic retrieval** pulls the most relevant past turns into the system prompt, giving the model a rolling long-term memory without token-window overflow.
+| Layer | Implementation |
+|---|---|
+| **Training & EDA** | `app.py` - data wrangling, text preprocessing, TF-IDF vectorization, 10-fold GridSearchCV, evaluation, and artifact export |
+| **Model artifact** | `model.joblib` - a scikit-learn Pipeline containing a fitted TF-IDF vectorizer and a tuned Multinomial Naïve Bayes classifier |
+| **Inference API** | `backend.py` - FastAPI service: validates input, cleans text, scores the review, and returns label, confidence, and top influential words |
+| **Interactive UI** | `frontend.py` - Streamlit app: single-review tab with example buttons, batch tab with paste or CSV/TXT upload, summary metrics, bar chart, and downloadable results table |
+| **Deployment** | Hugging Face Space - Streamlit frontend connects directly to the FastAPI backend |
 
-### 2 · Speech Transcription & Text-to-Speech
+---
 
-Microphone audio is decoded by **`faster-whisper`** (`small` model, `int8` quantization on CPU). The pipeline accepts WAV, PyAV-decoded audio, or raw `ffmpeg` output. Transcription always targets the *spoken* language - the result is placed in the message box untranslated, so the learner edits real input before sending.
+### Step-by-Step Pipeline
 
-Responses are spoken back via **`gTTS`**, with a JavaScript browser-speech-synthesis fallback for environments where gTTS audio cannot be served. Audio files are cached under `data/audio` and served over the FastAPI `/audio` endpoint.
+**Step 1 · Data Loading & Exploratory Analysis**
 
-### 3 · OCR + Translation
+`Restaurant_Review.csv` is loaded with Pandas into a 1,000 × 2 DataFrame (`review`, `liked`). The class distribution is perfectly balanced at 500 positive and 500 negative reviews. EDA covers character and word counts per class, a class-balance bar chart, and a word-count histogram to surface any length bias before modeling.
 
-Images submitted on the **Scan** tab are decoded by **Pillow** and passed to **`pytesseract`** with a language hint matched to the learner's target language. Seven language packs are supported: English, Spanish, German, Russian, Japanese, Chinese (Simplified), and Korean. The extracted text is then translated by the same Qwen pipeline (or Google Translate fallback), and the result is inserted into the conversation for further practice.
+**Step 2 · Text Preprocessing**
 
-> ⚠️ **Note:** Tesseract accuracy on handwritten or low-contrast images is limited; for best OCR results use clear, printed text with good contrast.
+A `clean_text()` function applies these transformations in order, designed to preserve sentiment-bearing negation words:
 
-### 4 · ChromaDB Memory & Spaced-Repetition Decks
-
-Vocabulary encountered in conversation or scan sessions can be saved to named decks stored under `data/decks`. Clicking **Create Deck** generates exactly **15 cards** in one shot. Each card carries a front (target-language word), back (native-language translation), and an SM-2 scheduling state: `interval`, `ease_factor`, and `repetitions`.
-
-The **SM-2 scheduler** adjusts `ease_factor` and `interval` after every Correct / Incorrect response - harder after a correct answer, easier after a miss - and surfaces due cards first. The **Quiz** tab samples from the same deck with adaptive difficulty: a right answer promotes the card to a harder tier, a wrong answer demotes it.
-
-### 5 · Handwriting Segmentation & CNN Inference
-
-The **Scribble** tab presents a large canvas with marker, eraser, thickness slider, and colour picker (black / red / green / blue). On submit, the canvas PNG is binarized, contour-segmented into individual character bounding boxes, and each character is resized to 28 × 28 pixels for **multimodal inference** through the selected CNN:
-
-| Model | Dataset | Classes |
+| Step | What it does | Key choice |
 |---|---|---|
-| `handwriting_mnist.keras` | MNIST | 10 digits (0–9) |
-| `handwriting_emnist.keras` | EMNIST balanced | 47 alphanumeric classes |
+| Lowercase | Normalizes case | Standard |
+| HTML & URL stripping | Removes noise | `re.sub` |
+| Contraction expansion | `won't → will not`, `n't → not` | Preserves negation |
+| Punctuation removal | Strips non-alpha characters | `re.sub` |
+| Tokenization | Splits into word tokens | NLTK `word_tokenize` |
+| Stopword removal | Drops common words | Keeps `no`, `not`, `nor`, `very`, `too`, `more`, `most`, `only` |
+| Lemmatization | Reduces inflection | NLTK `WordNetLemmatizer` - verb then noun pass |
 
-Both models were trained offline and ship as `.keras` weights with a matching `.labels.json`. **Inference runs entirely in the server process via NumPy** (exported `.npz` weights), keeping TensorFlow out of the same process as PyTorch/Transformers and avoiding the LLVM duplicate-option abort.
+> 💡 **Kept negation words** Standard stopword lists drop `not`, turning "not good" into "good" and flipping the sentiment signal. Retaining them is the single most impactful preprocessing decision on this dataset.
 
-> 💡 **Tip:** Use the EMNIST model for mixed letters and digits; use MNIST if you are only drawing numerals - it is faster and more accurate for that subset.
+**Step 3 · Feature Engineering & Text Representation**
+
+Reviews are converted to numeric vectors using **TF-IDF** (Term Frequency–Inverse Document Frequency) with **sublinear TF scaling** to dampen the effect of frequently repeated words. Unigrams and bigrams (`ngram_range=(1, 2)`) are included, so phrases like "not good" and "never again" are captured as single features alongside individual words. The vocabulary after fitting on the training set covers **4,874 unique terms**.
+
+**Step 4 · Model Training & Hyperparameter Tuning**
+
+Training and evaluation follow a strict 80/20 stratified split. A scikit-learn `Pipeline` wrapping `TfidfVectorizer → MultinomialNB` is tuned with **10-fold stratified GridSearchCV**, exploring:
+
+| Hyperparameter | Search space |
+|---|---|
+| `ngram_range` | `(1, 1)`, `(1, 2)` |
+| `min_df` | `1`, `2` |
+| `nb__alpha` | `0.05`, `0.1`, `0.3`, **`0.5`**, `1.0` |
+
+The best configuration — `ngram_range=(1, 2)`, `min_df=1`, `alpha=0.5` - was selected by cross-validation accuracy and re-fit on the full training set before evaluation on the held-out test set.
+
+> 💡 **Why Multinomial Naïve Bayes?** With ~1000 short training reviews, Naïve Bayes is ideal: it has very few parameters, trains in milliseconds on sparse TF-IDF matrices, and is well-calibrated for text classification at this scale. A Neural Network on the same data would have orders of magnitude more parameters to fit from less than a thousand examples.
+
+**Step 5 · Model Evaluation**
+
+Evaluated on the 200-review held-out test set:
+
+| Metric | Negative | Positive | Overall |
+|---|---|---|---|
+| Precision | 0.84 | 0.82 | 0.83 |
+| Recall | 0.82 | 0.84 | 0.83 |
+| F1-score | 0.83 | 0.83 | 0.83 |
+| **Accuracy** | - | - | **83%** |
+
+The confusion matrix shows 82 true negatives, 84 true positives, 18 false positives, and 16 false negatives - with no meaningful class bias in either direction.
+
+**Step 6 · Inference Pipeline**
+
+At inference time, `backend.py` loads `model.joblib` once at startup and applies the same `clean_text()` function used during training before passing the cleaned text to the pipeline's `transform → predict_proba` chain. Per-word log-odds weights (`feature_log_prob_[1] - feature_log_prob_[0]`) are computed at startup to identify the top 5 words that pushed each prediction toward Positive or Negative. Reviews that contain no vocabulary known to the model - after cleaning - are flagged as **Unknown** rather than returned with a misleading 50/50 guess.
 
 ---
 
 ## ⚡ Key Features
 
-| Tab | Capability |
-|---|---|
-| 🗨️ **Converse** | CEFR-level chat with Qwen; mic → Whisper STT; gTTS playback; ChromaDB long-term memory; replies always in the target language |
-| 📷 **Scan** | Image upload → Tesseract OCR → Qwen translation; 7 language packs; result feeds back into conversation |
-| 🃏 **Flashcards** | Click-to-flip card (target front, native back); Previous / Incorrect / Correct / Next in one row; SM-2 adaptive scheduling; 15-card deck creation; "Select Level" CEFR filter |
-| ❓ **Quiz** | Multiple-choice with vertically listed options; adaptive difficulty; score tracking |
-| ✍️ **Scribble** | Large canvas; marker/eraser/thickness/colour; MNIST or EMNIST model radio; character segmentation; word/line reading; ↻ clear on every tab |
-| 🐳 **Deployment** | Single Docker image (`python:3.13-slim`); CPU-only PyTorch from the PyTorch index; Tesseract with 7 packs; non-root UID 1000; named `app-data` volume; `/api/health` healthcheck |
+| | Feature | Detail |
+|---|---|---|
+| 🎯 | **Single review prediction** | Type or paste any review; get Positive/Negative with emoji, confidence %, and positive-probability bar |
+| 📂 | **Batch analysis** | Paste reviews (one per line) or upload a CSV (with a `review` column) or TXT file; cap of 500 reviews per batch |
+| 📊 | **Summary metrics** | Total, Positive, Negative, and Unrecognised counts with a bar chart after batch analysis |
+| 📋 | **Centered results table** | Sr. No. (from 1), Review, Label, Confidence (to 2 decimal %) - rendered as HTML for consistent alignment |
+| ⬇️ | **CSV export** | Download batch results with one click |
+| 🔌 | **REST API** | `GET /`, `GET /health`, `POST /predict`, `POST /predict-batch` - with Pydantic validation and auto-generated Swagger docs at `/docs` |
+| 🛡️ | **Input guardrails** | Blank reviews rejected (422); reviews capped at 2,000 characters; batches capped at 500; Unknown returned for no-vocabulary input |
+| 🔍 | **Word-level explainability** | Top 5 log-odds-weighted terms returned per prediction, showing which words drove the result |
+| ❤️ | **Backend health check** | Sidebar shows live green/red connection status; `GET /health` endpoint reports model type |
+| 📌 | **Example buttons** | Pre-loaded positive and negative examples in the Review tab for one-click demos |
 
 ---
 
 ## 📁 Project Structure
 
-```
-MultiLP/
-│
-├── app.py                  # Orchestrator - wires all modules; no HTTP or UI code
-├── backend.py              # FastAPI routes, Pydantic models, /api/* endpoints
-├── frontend.py             # Gradio 5-tab UI, dark CSS, entry point (python frontend.py)
-├── configuration.py        # All settings as cfg.* attributes (lowercase)
-├── conversation.py         # STT (Whisper), LLM (Qwen), TTS (gTTS), OCR (Tesseract), ChromaDB
-├── flashcards.py           # SM-2 scheduler, deck CRUD, quiz generation
-├── handwriting.py          # Keras CNN loader, NumPy inference, canvas segmentation
-│
-├── requirements.txt        # Pinned Python 3.13 dependencies
-├── Dockerfile              # python:3.13-slim; Tesseract; ffmpeg; CPU torch
-├── docker-compose.yml      # Named app-data volume; port 7860; healthcheck
-├── .dockerignore           # Excludes .venv, __pycache__, *.pyc, .git
-│
-├── data/
-│   ├── audio/              # gTTS output cache (served via /api/audio)
-│   ├── chroma/             # ChromaDB persistent store + chroma.sqlite3
-│   ├── decks/              # JSON flashcard deck files
-│   └── models/             # .keras weights + .labels.json for MNIST & EMNIST
-│
-└── songs/                  # Optional audio assets
+```text
+Restaurant Review Sentiment Analysis/
+├── Restaurant_Review.csv    # Source dataset
+├── app.py                   # EDA + training pipeline
+├── backend.py               # FastAPI inference service
+├── frontend.py              # Streamlit web app
+├── model.joblib             # Trained pipeline artifact
+└── requirements.txt         # Pinned Python dependencies
 ```
 
-| File / Folder | Role |
+| File | Role |
 |---|---|
-| `app.py` | Central **orchestrator**; imports and initialises all modules; exposes unified API surface to `backend.py` |
-| `backend.py` | **FastAPI** service: `/api/health`, `/api/chat`, `/api/transcribe`, `/api/ocr`, `/api/tts`, `/api/decks`, `/api/quiz`, `/api/handwriting` |
-| `frontend.py` | **Gradio** entry point; 5 tabs; dark polished CSS; single port 7860; `↻` refresh button on every tab |
-| `configuration.py` | `cfg.data_dir`, `cfg.prefer_ipv4`, `cfg.whisper_device`, `cfg.translator`, `cfg.preload`, and all other lowercase settings |
-| `conversation.py` | **End-to-end pipeline**: Whisper → Qwen → ChromaDB memory → gTTS; Google Translate circuit breaker; Tesseract OCR |
-| `flashcards.py` | SM-2 `interval`/`ease_factor` scheduler; 15-card deck builder; adaptive quiz sampler |
-| `handwriting.py` | Pre-trained CNN wrapper; NumPy `.npz` inference; contour segmentation; spacing/case heuristics |
-| `data/chroma/` | **Vector store** - conversation embeddings for semantic retrieval across sessions |
-| `data/models/` | `handwriting_mnist.keras`, `handwriting_emnist.keras`, and their `.labels.json` class maps |
+| `Restaurant_Review.csv` | Source dataset - 1,000 English restaurant reviews, balanced 500 positive / 500 negative, two columns: `review` (text) and `liked` (0 / 1) |
+| `app.py` | End-to-end training workflow organized as `# %%` cells: data loading, EDA (class balance, word-count distributions), text preprocessing, TF-IDF feature extraction, 10-fold GridSearchCV, test-set evaluation, confusion matrix, and `model.joblib` export |
+| `backend.py` | **FastAPI** inference service - loads `model.joblib` at startup, exposes `GET /`, `GET /health`, `POST /predict`, `POST /predict-batch`; performs `clean_text()` → TF-IDF transform → Naïve Bayes scoring → log-odds word-impact extraction on every request |
+| `frontend.py` | **Streamlit** web app - two tabs: **Review** (single prediction with example buttons) and **Upload** (batch paste or file upload, summary metrics, bar chart, center-aligned HTML results table, CSV download) |
+| `model.joblib` | Serialized scikit-learn Pipeline: `TfidfVectorizer(ngram_range=(1,2), sublinear_tf=True)` + `MultinomialNB(alpha=0.5)` - 4,874-term vocabulary, trained on 800 reviews |
+| `requirements.txt` | Pinned dependencies for a reproducible environment - 11 packages across data, NLP, ML, API, and UI layers |
 
 ---
 
 ## 💡 Use Cases & Future Extensions
 
-**Self-paced tutoring** - set your CEFR level, pick a target language, and practice reading, speaking, and writing in a single session without switching apps.
+### Applications
 
-**Pronunciation & listening drills** - speak into the mic, compare the Whisper transcript to what you intended, then hear the corrected form read back by gTTS.
-
-**On-the-go translation** - photograph a menu, street sign, or textbook page; OCR extracts the text; Qwen translates and explains it; the result feeds directly into the conversation.
-
-**Vocabulary deck generation** - unknown words surfaced in chat or scan are saved to a named deck and scheduled for SM-2 review automatically.
-
-**Handwriting & character practice** - draw kanji, Cyrillic, or Latin characters on the canvas and get instant CNN feedback.
+| Audience | How this system helps |
+|---|---|
+| 🍴 **Restaurant operators** | Upload a week's worth of review-platform exports and instantly see the positive/negative split and which reviews need a response |
+| 📣 **Marketing & reputation teams** | Monitor brand sentiment trends across batches of collected reviews without manual reading |
+| 🏫 **NLP learners** | A clean, fully annotated end-to-end pipeline - from raw text through preprocessing, TF-IDF, Naïve Bayes, and a deployed REST API - that fits in five files |
+| 🔬 **Data science researchers** | A reproducible baseline for benchmarking more complex models (LSTM, transformer fine-tuning) on the same dataset and train/test split |
 
 ### Natural Next Steps
 
-- **Expand the song/audio workflow** - add listening-comprehension exercises driven by audio files in `songs/`.
-- **Quantized models** - evaluate `Qwen2.5-0.5B` in GGUF or GPTQ format for faster cold-start on CPU Spaces.
-- **Automated API tests** - add `pytest` fixtures against the FastAPI endpoints and a GitHub Actions CI pipeline.
-- **Streaming responses** - wire Qwen's streaming output through a Server-Sent Events endpoint so replies appear word-by-word rather than all at once.
-- **User profiles** - persist CEFR level and language preferences per session ID in ChromaDB so returning learners resume where they left off.
+- **Confidence threshold tuning:** expose the 0.60 "uncertain" threshold as a configurable parameter so operators can tune precision vs. recall for their use case.
+- **Aspect-level sentiment:** break predictions down by food, service, ambience, and price using a multi-label extension or a secondary classifier.
+- **A three-class model (Neutral):** collect mixed-sentiment reviews and train a Positive / Neutral / Negative classifier to handle the "it was okay" edge case more precisely.
+- **Retraining pipeline:** add a feedback button that logs mis-classifications, accumulates them, and triggers a retraining run once a threshold is met.
+- **Multilingual support:** swap NLTK lemmatization for a language-agnostic preprocessor and extend the dataset to cover non-English reviews.
 
 ---
 
 ## 📜 License & Acknowledgements
 
-Released under the **MIT License** (add a `LICENSE` file and update the author name and year).
+Released under the **MIT License**.
 
-**Models & data**
-- [`Qwen/Qwen2.5-1.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) and [`Qwen/Qwen2.5-0.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) — Alibaba Cloud
-- [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) — SYSTRAN, based on OpenAI Whisper
-- [EMNIST balanced dataset](https://www.nist.gov/itl/products-and-services/emnist-dataset) — NIST
+**Dataset**
+Restaurant reviews compiled from public sources for binary sentiment classification (500 positive, 500 negative).
 
-**Built with** · [FastAPI](https://fastapi.tiangolo.com) · [Gradio](https://www.gradio.app) · [PyTorch](https://pytorch.org) · [TensorFlow / Keras](https://keras.io) · [ChromaDB](https://www.trychroma.com) · [Tesseract](https://github.com/tesseract-ocr/tesseract) · [gTTS](https://gtts.readthedocs.io) · [Docker](https://www.docker.com)
+**Built with**
+
+[scikit-learn](https://scikit-learn.org/) · [NLTK](https://www.nltk.org/) · [Pandas](https://pandas.pydata.org/) · [NumPy](https://numpy.org/) · [Matplotlib](https://matplotlib.org/) · [Seaborn](https://seaborn.pydata.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [Streamlit](https://streamlit.io/) · [Hugging Face Spaces](https://huggingface.co/spaces)
