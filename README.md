@@ -33,14 +33,13 @@ The system is split into a **FastAPI inference backend** and a **Streamlit opera
 
 ```mermaid
 flowchart LR
-    A[("Video Source\nWebcam / RTSP\nDrone / IP Camera")] --> B["backend.py\nFastAPI"]
-    B --> C[("model.joblib\nYOLOv8n weights\n+ tracker config")]
+    A["Video Source\nWebcam or Drone IP address"] --> B["backend.py\nFastAPI"]
+    B --> C["model.joblib"]
     C --> B
     B -->|MJPEG stream| D["frontend.py\nStreamlit UI"]
     B -->|REST API| D
-    D -->|Download| E[("Annotated MP4\nTimestamped filename")]
-    F["app.py\nDesktop mode"] --> A
-    F --> G[("output_video.mp4")]
+    D -->|Download| E[("Output Video file)]
+    F["app.py"] --> A
 ```
 
 | Layer | Implementation |
@@ -120,11 +119,11 @@ When the operator presses **Stop Capturing**:
 
 The Streamlit UI has three states that transition based on operator actions:
 
-```mermaid
+```
 flowchart LR
     IDLE(["IDLE"]) -->|"Begin Capturing"| LIVE(["LIVE"])
     LIVE -->|"Stop Capturing"| REVIEW(["REVIEW"])
-    REVIEW -->|"Capture Again / Discard"| IDLE
+    REVIEW -->|"Capture Again or Discard"| IDLE
 ```
 
 | State | What the operator sees |
@@ -202,7 +201,7 @@ Disaster Response Drone/
 
 Released under the **MIT License** (add a `LICENSE` file and update the author name and year).
 
-**Model:** [YOLOv8n](https://github.com/ultralytics/ultralytics) — Ultralytics, trained on [COCO](https://cocodataset.org/).
+**Model:** [YOLOv8n](https://github.com/ultralytics/ultralytics) - Ultralytics, trained on [COCO](https://cocodataset.org/).
 **Tracker:** ByteTrack, integrated via `ultralytics` and `lapx==0.13.1`.
 
 Built with [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) · [FastAPI](https://fastapi.tiangolo.com) · [Streamlit](https://streamlit.io) · [OpenCV](https://opencv.org) · [PyTorch](https://pytorch.org) · [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)
