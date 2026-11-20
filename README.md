@@ -33,12 +33,12 @@ The system is split into a **FastAPI inference backend** and a **Streamlit opera
 
 ```mermaid
 flowchart LR
-    A["Video Source\nWebcam or Drone IP address"] --> B["backend.py\nFastAPI"]
+    A[("Video Source\nWebcam or Drone IP address")] --> B["backend.py\nFastAPI"]
     B --> C["model.joblib"]
     C --> B
     B -->|MJPEG stream| D["frontend.py\nStreamlit UI"]
     B -->|REST API| D
-    D -->|Download| E[("Output Video file)]
+    D -->|Download| E[("Output Video file")]
     F["app.py"] --> A
 ```
 
