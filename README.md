@@ -77,6 +77,7 @@ A **LightGBM** regressor is selected for its strong performance on tabular data 
 
 ### Step 5 · Model Evaluation
 
+```
 <table width="100%">
   <tr>
     <td align="center" width="25%">
@@ -97,6 +98,7 @@ A **LightGBM** regressor is selected for its strong performance on tabular data 
     </td>
   </tr>
 </table>
+```
 
 💡 Test metrics are stored inside `model.joblib` and exposed live through the `/model-info` endpoint, so the dashboard and API always reflect the actual trained model rather than documented estimates.
 
