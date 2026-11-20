@@ -77,21 +77,26 @@ A **LightGBM** regressor is selected for its strong performance on tabular data 
 
 ### Step 5 · Model Evaluation
 
-R²
-
-Coefficient of Determination
-
-RMSE
-
-Root Mean Squared Error
-
-MAE
-
-Mean Absolute Error
-
-10-fold
-
-Cross-Validation
+<table>
+  <tr>
+    <td align="center" width="25%" style="background-color:#0e151d; border:1px solid #1f2937; border-radius:10px; padding:16px 8px;">
+      <div style="font-size:28px; font-weight:800; color:#539bf5; line-height:1.2;">R²</div>
+      <div style="font-size:11px; font-weight:600; color:#8b949e; letter-spacing:0.6px; margin-top:8px; line-height:1.4;">COEFFICIENT OF<br/>DETERMINATION</div>
+    </td>
+    <td align="center" width="25%" style="background-color:#0e151d; border:1px solid #1f2937; border-radius:10px; padding:16px 8px;">
+      <div style="font-size:28px; font-weight:800; color:#539bf5; line-height:1.2;">RMSE</div>
+      <div style="font-size:11px; font-weight:600; color:#8b949e; letter-spacing:0.6px; margin-top:8px; line-height:1.4;">ROOT MEAN<br/>SQUARED ERROR</div>
+    </td>
+    <td align="center" width="25%" style="background-color:#0e151d; border:1px solid #1f2937; border-radius:10px; padding:16px 8px;">
+      <div style="font-size:28px; font-weight:800; color:#539bf5; line-height:1.2;">MAE</div>
+      <div style="font-size:11px; font-weight:600; color:#8b949e; letter-spacing:0.6px; margin-top:8px; line-height:1.4;">MEAN ABSOLUTE<br/>ERROR</div>
+    </td>
+    <td align="center" width="25%" style="background-color:#0e151d; border:1px solid #1f2937; border-radius:10px; padding:16px 8px;">
+      <div style="font-size:28px; font-weight:800; color:#539bf5; line-height:1.2;">10-fold</div>
+      <div style="font-size:11px; font-weight:600; color:#8b949e; letter-spacing:0.6px; margin-top:8px; line-height:1.4;">CROSS-VALIDATION</div>
+    </td>
+  </tr>
+</table>
 
 💡 Test metrics are stored inside `model.joblib` and exposed live through the `/model-info` endpoint, so the dashboard and API always reflect the actual trained model rather than documented estimates.
 
@@ -99,15 +104,17 @@ Permutation importance and MDI feature importance are both computed and plotted 
 
 ### Step 6 · Risk Labeling
 
-Every prediction is assigned a human-readable risk tier based on the back-transformed MMR value:
+```markdown
+Every prediction is assigned a human-readable risk tier based on the back-transformed MMR value:[cite: 41, 43]
 
 | Risk Label | MMR Range (deaths per 100,000 live births) |
-| --- | --- |
-| Very Low | \< 20 |
-| Low | 20 – 99 |
-| Medium | 100 – 299 |
-| High | 300 – 699 |
-| Very High | ≥ 700 |
+| :--- | :--- |
+| <span style="background-color:#0f3d21; color:#4ade80; padding:4px 12px; border-radius:999px; font-weight:600; font-size:13px;">Very Low</span> | &lt; 20 |
+| <span style="background-color:#0c324d; color:#38bdf8; padding:4px 12px; border-radius:999px; font-weight:600; font-size:13px;">Low</span> | 20 – 99 |
+| <span style="background-color:#3b2606; color:#fbbf24; padding:4px 12px; border-radius:999px; font-weight:600; font-size:13px;">Medium</span> | 100 – 299 |
+| <span style="background-color:#3d1908; color:#fb923c; padding:4px 12px; border-radius:999px; font-weight:600; font-size:13px;">High</span> | 300 – 699 |
+| <span style="background-color:#3b0d11; color:#f87171; padding:4px 12px; border-radius:999px; font-weight:600; font-size:13px;">Very High</span> | ≥ 700 |
+```
 
 ### Step 7 · Model Artifact Export (`model.joblib`)
 
