@@ -1,17 +1,17 @@
 <div align="center">
 
-# 🍽️ Restaurant Review Sentiment Analysis
+# 🛰️ Disaster Response Drone
 
-### Classify any restaurant review as Positive or Negative - from raw text to a production inference API
+### Real-time aerial survivor detection - from raw video feed to a deployable operator console
 
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
-![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9.1-F7931E?logo=scikitlearn&logoColor=white)
-![NLTK](https://img.shields.io/badge/NLTK-3.10.4-154f3c)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.165.0-009688?logo=fastapi&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.15.2-3776AB?logo=python&logoColor=white)
+![YOLOv8](https://img.shields.io/badge/YOLOv8n-Ultralytics%208.4.211-00BFFF?logo=github&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.162.5-009688?logo=fastapi&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.67.0-FF4B4B?logo=streamlit&logoColor=white)
-![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Deployed-FFD21E?logo=huggingface&logoColor=black)
+![OpenCV](https://img.shields.io/badge/OpenCV-5.0.0-5C3EE8?logo=opencv&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.15.0-EE4C2C?logo=pytorch&logoColor=white)
 
-[Overview](#-overview) · [How It Works](#-how-it-works) · [Features](#-key-features) · [Structure](#-project-structure) · [Use Cases](#-use-cases--future-extensions)
+[Overview](#-overview) · [How It Works](#-how-it-works) · [Key Features](#-key-features) · [Project Structure](#-project-structure) · [Use Cases](#-use-cases)
 
 </div>
 
@@ -19,11 +19,11 @@
 
 ## 📖 Overview
 
-Online restaurant reviews are short, opinionated, and full of negations and slang - making them harder to classify reliably than longer product reviews. Manual triage is impractical at scale, yet a simple keyword search misses phrases like "not good at all" or "won't come back."
+In disaster scenarios - earthquakes, floods, collapsed buildings - first responders have minutes to locate survivors across terrain that is too dangerous or too large to cover on foot. Aerial drones can sweep wide areas quickly, but a human operator watching a live feed cannot track every person reliably, loses count when the same survivor reappears, and has no durable record of what was seen.
 
-**Restaurant Review Sentiment Analysis** solves this by combining a carefully tuned NLP preprocessing pipeline with a Multinomial Naïve Bayes classifier, delivered through a FastAPI backend and a Streamlit web app. It classifies any English restaurant review - typed individually or submitted in bulk - as **Positive** or **Negative**, and returns a calibrated confidence score alongside the words that drove the decision.
+**Disaster Response Drone** turns a standard drone video feed into an intelligent, real-time operator console. It runs a **YOLOv8n** object detector with **ByteTrack** persistent tracking on a live video stream - from a webcam, an RTSP drone feed, or any IP camera URL - and maintains a **unique survivor count** that is robust to re-entries and momentary disappearances. Every identified survivor gets a persistent track ID, so the same person is never double-counted. The session is recorded, re-encoded to a browser-playable MP4, and offered for download the moment the operator stops the feed.
 
-The dataset comprises **1,000 balanced reviews** (500 positive, 500 negative) averaging 10 words per review. The final model achieves **83% test accuracy** with balanced precision and recall across both classes.
+The system is split into a **FastAPI inference backend** and a **Streamlit operator dashboard**, decoupled so the AI model runs at full speed regardless of UI rendering. A standalone `app.py` script provides a lightweight desktop mode - no server required - for single-operator field use.
 
 ---
 
@@ -33,79 +33,107 @@ The dataset comprises **1,000 balanced reviews** (500 positive, 500 negative) av
 
 ```mermaid
 flowchart LR
-    A[("Reviews\ndataset (CSV file)")] --> B["app.py"]
-    B --> C["model.joblib"]
-    C --> D["backend.py\nFastAPI"]
-    D <--> E["frontend.py\nStreamlit UI"]
-    E --> F["Hugging Face\nDeployment"]
+    A[("Video Source\nWebcam / RTSP\nDrone / IP Camera")] --> B["backend.py\nFastAPI"]
+    B --> C[("model.joblib\nYOLOv8n weights\n+ tracker config")]
+    C --> B
+    B -->|MJPEG stream| D["frontend.py\nStreamlit UI"]
+    B -->|REST API| D
+    D -->|Download| E[("Annotated MP4\nTimestamped filename")]
+    F["app.py\nDesktop mode"] --> A
+    F --> G[("output_video.mp4")]
 ```
 
 | Layer | Implementation |
 |---|---|
-| **Training & EDA** | `app.py` - data wrangling, text preprocessing, TF-IDF vectorization, 10-fold GridSearchCV, evaluation, and artifact export |
-| **Model artifact** | `model.joblib` - a scikit-learn Pipeline containing a fitted TF-IDF vectorizer and a tuned Multinomial Naïve Bayes classifier |
-| **Inference API** | `backend.py` - FastAPI service: validates input, cleans text, scores the review, and returns label, confidence, and top influential words |
-| **Interactive UI** | `frontend.py` - Streamlit app: single-review tab with example buttons, batch tab with paste or CSV/TXT upload, summary metrics, bar chart, and downloadable results table |
-| **Deployment** | Hugging Face Space - Streamlit frontend connects directly to the FastAPI backend |
+| **Standalone script** | `app.py` - single-file desktop mode: captures webcam, runs YOLOv8n tracking at `conf=0.5`, draws bounding boxes, displays live count, writes `output_video.mp4`, exits on `e` or window close |
+| **Model artifact** | `model.joblib` - self-contained bundle: YOLOv8n weights bytes, ByteTrack config, detection thresholds, and image size, loaded once at backend startup |
+| **Inference backend** | `backend.py` - FastAPI service: two-thread architecture (video reader + AI detector), session management, MJPEG stream, MP4 recording, and re-encoding |
+| **Operator console** | `frontend.py` - Streamlit dashboard: single-page operator interface with live video, real-time telemetry cards, and post-session review |
 
 ---
 
-### Step-by-Step Pipeline
+### Step 1 · Model Bundle: `model.joblib`
 
-**Step 1 · Data Loading & Exploratory Analysis**
+At first startup, `backend.py` calls `build_model()`, which downloads `yolov8n.pt` and serializes the following into `model.joblib` via `joblib.dump(..., compress=3)`:
 
-`Restaurant_Review.csv` is loaded with Pandas into a 1,000 × 2 DataFrame (`review`, `liked`). The class distribution is perfectly balanced at 500 positive and 500 negative reviews. EDA covers character and word counts per class, a class-balance bar chart, and a word-count histogram to surface any length bias before modeling.
-
-**Step 2 · Text Preprocessing**
-
-A `clean_text()` function applies these transformations in order, designed to preserve sentiment-bearing negation words:
-
-| Step | What it does | Key choice |
+| Key | Value | Purpose |
 |---|---|---|
-| Lowercase | Normalizes case | Standard |
-| HTML & URL stripping | Removes noise | `re.sub` |
-| Contraction expansion | `won't → will not`, `n't → not` | Preserves negation |
-| Punctuation removal | Strips non-alpha characters | `re.sub` |
-| Tokenization | Splits into word tokens | NLTK `word_tokenize` |
-| Stopword removal | Drops common words | Keeps `no`, `not`, `nor`, `very`, `too`, `more`, `most`, `only` |
-| Lemmatization | Reduces inflection | NLTK `WordNetLemmatizer` - verb then noun pass |
+| `weights_bytes` | Raw `.pt` file bytes | Self-contained - no separate weight file needed at serving time |
+| `target_classes` | `[0]` | Person class only (COCO index 0) |
+| `conf` | `0.35` | Detection confidence threshold |
+| `iou` | `0.5` | NMS IoU threshold |
+| `imgsz` | `640` (CPU: auto-lowered to `480`) | Inference image size |
+| `tracker` | `bytetrack.yaml` | ByteTrack persistent multi-object tracker |
+| `min_track_frames` | `3` | Frames a track ID must be seen before being counted as a confirmed survivor |
 
-> 💡 **Kept negation words** Standard stopword lists drop `not`, turning "not good" into "good" and flipping the sentiment signal. Retaining them is the single most impactful preprocessing decision on this dataset.
+On subsequent starts, `model.joblib` is loaded directly - no rebuild. The weights are written to a temp file and loaded into a warm YOLO model with **three dummy-frame warm-up passes** so the first real frame is detected without delay.
 
-**Step 3 · Feature Engineering & Text Representation**
+---
 
-Reviews are converted to numeric vectors using **TF-IDF** (Term Frequency–Inverse Document Frequency) with **sublinear TF scaling** to dampen the effect of frequently repeated words. Unigrams and bigrams (`ngram_range=(1, 2)`) are included, so phrases like "not good" and "never again" are captured as single features alongside individual words. The vocabulary after fitting on the training set covers **4,874 unique terms**.
+### Step 2 · Two-Thread Inference Pipeline
 
-**Step 4 · Model Training & Hyperparameter Tuning**
+The core design separates **video throughput** from **AI speed**, so the live feed never lags regardless of CPU inference time.
 
-Training and evaluation follow a strict 80/20 stratified split. A scikit-learn `Pipeline` wrapping `TfidfVectorizer → MultinomialNB` is tuned with **10-fold stratified GridSearchCV**, exploring:
+```
+_read_loop (Thread 1)          _detect_loop (Thread 2)
+─────────────────────          ───────────────────────
+cap.read() → raw frame    →→→  model.track(latest raw frame)
+_draw(last known boxes)        update self.boxes, self.confirmed
+write annotated frame to MP4   update self.in_view, self.det_fps
+encode JPEG → self.latest
+```
 
-| Hyperparameter | Search space |
+- **Thread 1** (`_read_loop`) reads frames from the camera at native speed, draws the most recently known bounding boxes on each frame, records to a raw MP4, and publishes the JPEG to the MJPEG stream. It sets `cap.set(CAP_PROP_BUFFERSIZE, 1)` to always use the newest available frame and never queue stale ones.
+- **Thread 2** (`_detect_loop`) picks up the newest raw frame whenever it changes, runs `model.track()` with ByteTrack persistence, and updates the shared box list and confirmed-survivor set. If no GPU is available, `imgsz` is automatically capped at 480 to reduce CPU inference time.
+
+**Survivor counting:** a track ID is added to `confirmed` only after it appears in `min_track_frames` (3) consecutive detections, filtering one-frame ghost detections. The confirmed set is a Python `set`, so the same person re-entering the frame never increments the count.
+
+---
+
+### Step 3 · Recording & Re-encoding
+
+When the operator presses **Stop Capturing**:
+
+1. Both threads are joined with a 15-second timeout.
+2. `_finalize()` measures the real elapsed frame rate from `t_first`/`t_last` timestamps.
+3. `ffmpeg` (via `imageio-ffmpeg`) re-encodes the raw MP4 to H.264 (`libx264`, `yuv420p`, `+faststart`) at the corrected frame rate, so the file plays correctly in any browser.
+4. The raw file is deleted; only the final MP4 is kept in the OS temp directory and served for download.
+5. After the Streamlit client fetches the video, the server copy is deleted automatically - no output folder is left in the project directory.
+
+---
+
+### Step 4 · REST API Endpoints (`backend.py`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/health` | Model status, device (CPU/CUDA), uptime, active session ID |
+| `POST` | `/session/start` | Start a new session; body: `{"source": "0"}` or a stream URL |
+| `GET` | `/session/status` | Live telemetry: in-view count, unique survivors, FPS, elapsed time |
+| `GET` | `/session/stream` | MJPEG multipart stream of annotated frames |
+| `POST` | `/session/stop` | Stop recording, finalize MP4; returns session summary |
+| `GET` | `/session/{sid}/download` | Serve the finalized MP4 for download |
+| `DELETE` | `/session/{sid}` | Discard the MP4 and clear the session |
+
+---
+
+### Step 5 · Operator Dashboard (`frontend.py`)
+
+The Streamlit UI has three states that transition based on operator actions:
+
+```
+flowchart LR
+    IDLE(["IDLE"]) -->|"Begin Capturing"| LIVE(["LIVE"])
+    LIVE -->|"Stop Capturing"| REVIEW(["REVIEW"])
+    REVIEW -->|"Capture Again / Discard"| IDLE
+```
+
+| State | What the operator sees |
 |---|---|
-| `ngram_range` | `(1, 1)`, `(1, 2)` |
-| `min_df` | `1`, `2` |
-| `nb__alpha` | `0.05`, `0.1`, `0.3`, **`0.5`**, `1.0` |
+| **Idle** | System-ready badge, video source selector (webcam port or stream URL), **Begin Capturing** button |
+| **Live** | Full-width annotated video stream, four live telemetry cards (Total Survivors · In View · Video FPS · Elapsed), AI detection speed caption, **Stop Capturing** button |
+| **Review** | Session summary cards, inline video player, **Discard** (red) · **Download MP4** (blue) · **Capture Again** (green) buttons; filename is `Survivor_Detection_YYYY-MM-DD_HH-MM.mp4` |
 
-The best configuration — `ngram_range=(1, 2)`, `min_df=1`, `alpha=0.5` - was selected by cross-validation accuracy and re-fit on the full training set before evaluation on the held-out test set.
-
-> 💡 **Why Multinomial Naïve Bayes?** With ~1000 short training reviews, Naïve Bayes is ideal: it has very few parameters, trains in milliseconds on sparse TF-IDF matrices, and is well-calibrated for text classification at this scale. A Neural Network on the same data would have orders of magnitude more parameters to fit from less than a thousand examples.
-
-**Step 5 · Model Evaluation**
-
-Evaluated on the 200-review held-out test set:
-
-| Metric | Negative | Positive | Overall |
-|---|---|---|---|
-| Precision | 0.84 | 0.82 | 0.83 |
-| Recall | 0.82 | 0.84 | 0.83 |
-| F1-score | 0.83 | 0.83 | 0.83 |
-| **Accuracy** | - | - | **83%** |
-
-The confusion matrix shows 82 true negatives, 84 true positives, 18 false positives, and 16 false negatives - with no meaningful class bias in either direction.
-
-**Step 6 · Inference Pipeline**
-
-At inference time, `backend.py` loads `model.joblib` once at startup and applies the same `clean_text()` function used during training before passing the cleaned text to the pipeline's `transform → predict_proba` chain. Per-word log-odds weights (`feature_log_prob_[1] - feature_log_prob_[0]`) are computed at startup to identify the top 5 words that pushed each prediction toward Positive or Negative. Reviews that contain no vocabulary known to the model - after cleaning - are flagged as **Unknown** rather than returned with a misleading 50/50 guess.
+The telemetry panel refreshes every second via `@st.fragment(run_every=1)` without re-rendering the video frame, keeping the UI responsive. If the browser is refreshed mid-session, the UI re-attaches to the running session automatically.
 
 ---
 
@@ -113,70 +141,68 @@ At inference time, `backend.py` loads `model.joblib` once at startup and applies
 
 | | Feature | Detail |
 |---|---|---|
-| 🎯 | **Single review prediction** | Type or paste any review; get Positive/Negative with emoji, confidence %, and positive-probability bar |
-| 📂 | **Batch analysis** | Paste reviews (one per line) or upload a CSV (with a `review` column) or TXT file; cap of 500 reviews per batch |
-| 📊 | **Summary metrics** | Total, Positive, Negative, and Unrecognised counts with a bar chart after batch analysis |
-| 📋 | **Centered results table** | Sr. No. (from 1), Review, Label, Confidence (to 2 decimal %) - rendered as HTML for consistent alignment |
-| ⬇️ | **CSV export** | Download batch results with one click |
-| 🔌 | **REST API** | `GET /`, `GET /health`, `POST /predict`, `POST /predict-batch` - with Pydantic validation and auto-generated Swagger docs at `/docs` |
-| 🛡️ | **Input guardrails** | Blank reviews rejected (422); reviews capped at 2,000 characters; batches capped at 500; Unknown returned for no-vocabulary input |
-| 🔍 | **Word-level explainability** | Top 5 log-odds-weighted terms returned per prediction, showing which words drove the result |
-| ❤️ | **Backend health check** | Sidebar shows live green/red connection status; `GET /health` endpoint reports model type |
-| 📌 | **Example buttons** | Pre-loaded positive and negative examples in the Review tab for one-click demos |
+| 🎯 | **Unique survivor counting** | ByteTrack persistent IDs + 3-frame confirmation gate eliminate double-counting and ghost detections |
+| ⚡ | **Lag-free live feed** | Video reader and AI detector run on separate threads; camera buffer pinned to 1 frame so the display never shows stale video |
+| 🔌 | **Any video source** | Webcam index (0, 1, 2…), RTSP drone stream, HTTP/MJPEG IP camera, or any OpenCV-compatible URL |
+| 📦 | **Self-contained artifact** | `model.joblib` bundles YOLOv8n weights + all inference config in one file; backend serves without loose `.pt` files |
+| 🎬 | **Corrected MP4 export** | Real FPS measured from frame timestamps; `ffmpeg` re-encodes to browser-playable H.264 with correct playback speed |
+| 🗂️ | **Zero project clutter** | Recordings live in the OS temp directory and are deleted server-side after download; no `outputs/` folder in the project |
+| 🔁 | **Session resume** | Refreshing the browser mid-session re-attaches to the live feed without data loss |
+| 🩺 | **Health monitoring** | `GET /health` reports model load status, compute device, uptime, and active session for operator awareness |
+| 🖥️ | **Desktop mode** | `app.py` runs standalone with `cv2.imshow`, no server needed; saves `output_video.mp4` locally |
+| ♻️ | **Reproducibility** | All dependencies pinned in `requirements.txt`; `model.joblib` rebuilt deterministically if missing |
 
 ---
 
 ## 📁 Project Structure
 
 ```text
-Restaurant Review Sentiment Analysis/
-├── Restaurant_Review.csv    # Source dataset
-├── app.py                   # EDA + training pipeline
-├── backend.py               # FastAPI inference service
-├── frontend.py              # Streamlit web app
-├── model.joblib             # Trained pipeline artifact
-└── requirements.txt         # Pinned Python dependencies
+Disaster Response Drone/
+├── app.py               # Standalone desktop script: webcam → detection → output_video.mp4
+├── backend.py           # FastAPI inference service: session management, MJPEG stream, REST API
+├── frontend.py          # Streamlit operator dashboard: idle → live → review flow
+├── model.joblib         # Serialized bundle: YOLOv8n weights, ByteTrack config, thresholds
+├── yolov8n.pt           # YOLOv8 nano weights (COCO, downloaded by ultralytics on first run)
+└── requirements.txt     # Pinned Python dependencies for reproducible setup
 ```
 
 | File | Role |
 |---|---|
-| `Restaurant_Review.csv` | Source dataset - 1,000 English restaurant reviews, balanced 500 positive / 500 negative, two columns: `review` (text) and `liked` (0 / 1) |
-| `app.py` | End-to-end training workflow organized as `# %%` cells: data loading, EDA (class balance, word-count distributions), text preprocessing, TF-IDF feature extraction, 10-fold GridSearchCV, test-set evaluation, confusion matrix, and `model.joblib` export |
-| `backend.py` | **FastAPI** inference service - loads `model.joblib` at startup, exposes `GET /`, `GET /health`, `POST /predict`, `POST /predict-batch`; performs `clean_text()` → TF-IDF transform → Naïve Bayes scoring → log-odds word-impact extraction on every request |
-| `frontend.py` | **Streamlit** web app - two tabs: **Review** (single prediction with example buttons) and **Upload** (batch paste or file upload, summary metrics, bar chart, center-aligned HTML results table, CSV download) |
-| `model.joblib` | Serialized scikit-learn Pipeline: `TfidfVectorizer(ngram_range=(1,2), sublinear_tf=True)` + `MultinomialNB(alpha=0.5)` - 4,874-term vocabulary, trained on 800 reviews |
-| `requirements.txt` | Pinned dependencies for a reproducible environment - 11 packages across data, NLP, ML, API, and UI layers |
+| `app.py` | Lightweight field script - loads `yolov8n.pt`, opens the webcam, runs `model.track()` at `conf=0.5`, draws `Survivor (XX%)` boxes, overlays a live-count HUD, and writes every annotated frame to `output_video.mp4`. Exits cleanly on `e` keypress or window close, then prints total unique survivors. |
+| `backend.py` | FastAPI service - loads `model.joblib` at startup, runs three warm-up passes on a dummy frame, then manages one `Session` at a time. Each session spawns two threads: a video reader at camera speed and an AI detector that always processes the newest frame. Provides MJPEG streaming, session telemetry, and MP4 finalization via `ffmpeg`. |
+| `frontend.py` | Streamlit dashboard - single-page operator console with a dark drone-ops theme (Rajdhani/Inter fonts, card-based telemetry, pulsing LIVE badge). Talks to `backend.py` only via HTTP; no model imports. Downloads the annotated MP4 into browser memory and offers it for save or discard. |
+| `model.joblib` | `joblib`- compressed bundle containing YOLOv8n weight bytes, detection config (`conf=0.35`, `iou=0.5`, `imgsz=640`), ByteTrack tracker reference, `min_track_frames=3`, and bundle metadata. Rebuilt automatically on first run if absent. |
+| `yolov8n.pt` | YOLOv8 nano COCO weights - 6.2 MB, downloaded by `ultralytics` on demand. Can be replaced with domain-specific weights (VisDrone, SAR, thermal) by setting the `WEIGHTS` environment variable before starting the backend. |
+| `requirements.txt` | Twelve pinned packages (`numpy==2.5.4`, `ultralytics==8.4.211`, `torch==2.15.0`, `fastapi==0.162.5`, `streamlit==1.67.0`, etc.) for a fully deterministic build. |
 
 ---
 
-## 💡 Use Cases & Future Extensions
+## 💡 Use Cases
 
-### Applications
-
-| Audience | How this system helps |
+| Domain | How This System Helps |
 |---|---|
-| 🍴 **Restaurant operators** | Upload a week's worth of review-platform exports and instantly see the positive/negative split and which reviews need a response |
-| 📣 **Marketing & reputation teams** | Monitor brand sentiment trends across batches of collected reviews without manual reading |
-| 🏫 **NLP learners** | A clean, fully annotated end-to-end pipeline - from raw text through preprocessing, TF-IDF, Naïve Bayes, and a deployed REST API - that fits in five files |
-| 🔬 **Data science researchers** | A reproducible baseline for benchmarking more complex models (LSTM, transformer fine-tuning) on the same dataset and train/test split |
+| 🌪️ **Natural disaster response** | Drone operators sweep earthquake or flood zones and get a live unique-survivor count without manually tallying a chaotic video feed |
+| 🔥 **Wildfire & evacuation support** | Identify people in areas cut off by fire lines; the timestamped MP4 gives incident commanders a durable record of who was spotted and when |
+| 🏔️ **Search and rescue (SAR)** | Swap in thermal or VisDrone-trained weights and connect to any RTSP stream from a SAR drone; the system works with any OpenCV-compatible source |
+| 🏗️ **Construction site safety** | Monitor restricted zones in real time; the unique-ID tracker counts how many individuals are present without counting re-entries |
+| 🎓 **Computer vision research** | The two-thread reader/detector architecture and `model.joblib` bundling pattern are reusable templates for any real-time detection system where inference speed is slower than camera frame rate |
+| 🔁 **Custom model rollout** | Replace `model.joblib` by setting `WEIGHTS` and restarting - `backend.py` and `frontend.py` require no code changes |
 
 ### Natural Next Steps
 
-- **Confidence threshold tuning:** expose the 0.60 "uncertain" threshold as a configurable parameter so operators can tune precision vs. recall for their use case.
-- **Aspect-level sentiment:** break predictions down by food, service, ambience, and price using a multi-label extension or a secondary classifier.
-- **A three-class model (Neutral):** collect mixed-sentiment reviews and train a Positive / Neutral / Negative classifier to handle the "it was okay" edge case more precisely.
-- **Retraining pipeline:** add a feedback button that logs mis-classifications, accumulates them, and triggers a retraining run once a threshold is met.
-- **Multilingual support:** swap NLTK lemmatization for a language-agnostic preprocessor and extend the dataset to cover non-English reviews.
+- **Domain-specific weights:** fine-tune on VisDrone, HERIDAL, or a thermal-imagery SAR dataset to improve detection at altitude and in low-light conditions.
+- **Multi-drone sessions:** extend the session model to handle simultaneous feeds from multiple drones, with a merged unique-ID count across all streams.
+- **GPS coordinate overlay:** fuse drone telemetry with detection bounding boxes to log survivor GPS coordinates alongside the video for handoff to ground teams.
+- **Automated alert:** add a webhook or SMS trigger when the unique survivor count crosses a threshold, so the operator does not need to watch the screen continuously.
+- **Cloud deployment:** run `backend.py` on a GPU-equipped cloud VM, set `PUBLIC_API_URL` to the server's public IP, and open the Streamlit UI from any device in the field.
 
 ---
 
-## 📜 License & Acknowledgements
+## 📄 License & Acknowledgements
 
-Released under the **MIT License**.
+Released under the **MIT License** (add a `LICENSE` file and update the author name and year).
 
-**Dataset**
-Restaurant reviews compiled from public sources for binary sentiment classification (500 positive, 500 negative).
+**Model:** [YOLOv8n](https://github.com/ultralytics/ultralytics) — Ultralytics, trained on [COCO](https://cocodataset.org/).
+**Tracker:** ByteTrack, integrated via `ultralytics` and `lapx==0.13.1`.
 
-**Built with**
-
-[scikit-learn](https://scikit-learn.org/) · [NLTK](https://www.nltk.org/) · [Pandas](https://pandas.pydata.org/) · [NumPy](https://numpy.org/) · [Matplotlib](https://matplotlib.org/) · [Seaborn](https://seaborn.pydata.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [Streamlit](https://streamlit.io/) · [Hugging Face Spaces](https://huggingface.co/spaces)
+Built with [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) · [FastAPI](https://fastapi.tiangolo.com) · [Streamlit](https://streamlit.io) · [OpenCV](https://opencv.org) · [PyTorch](https://pytorch.org) · [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)
