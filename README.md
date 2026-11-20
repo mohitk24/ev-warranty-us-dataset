@@ -1,17 +1,18 @@
 <div align="center">
 
-# 🛰️ Disaster Response Drone
+# 🌿 Rainfall Vegetation Predictor
 
-### Real-time aerial survivor detection - from raw video feed to a deployable operator console
+### End-to-end vegetation forecasting - from Rwanda district rainfall to a containerized inference API
 
-![Python](https://img.shields.io/badge/Python-3.15.2-3776AB?logo=python&logoColor=white)
-![YOLOv8](https://img.shields.io/badge/YOLOv8n-Ultralytics%208.4.211-00BFFF?logo=github&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.162.5-009688?logo=fastapi&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.67.0-FF4B4B?logo=streamlit&logoColor=white)
-![OpenCV](https://img.shields.io/badge/OpenCV-5.0.0-5C3EE8?logo=opencv&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.15.0-EE4C2C?logo=pytorch&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.15-3776AB?logo=python&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9.1-F7931E?logo=scikitlearn&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)
+![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Deployed-FFD21E?logo=huggingface&logoColor=black)
+![Altair](https://img.shields.io/badge/Altair-Interactive%20Charts-blue)
 
-[Overview](#-overview) · [How It Works](#-how-it-works) · [Key Features](#-key-features) · [Project Structure](#-project-structure) · [Use Cases](#-use-cases)
+[Overview](#-overview) · [How It Works](#-how-it-works) · [Key Features](#-key-features) · [Project Structure](#-project-structure) · [Use Cases](#-industry-use-cases)
 
 </div>
 
@@ -19,11 +20,9 @@
 
 ## 📖 Overview
 
-In disaster scenarios - earthquakes, floods, collapsed buildings - first responders have minutes to locate survivors across terrain that is too dangerous or too large to cover on foot. Aerial drones can sweep wide areas quickly, but a human operator watching a live feed cannot track every person reliably, loses count when the same survivor reappears, and has no durable record of what was seen.
+In rainfall-dependent agricultural regions, understanding how precipitation translates into vegetation health is critical for crop planning, drought response, and resource allocation. Rwanda's 30 districts each exhibit distinct seasonal patterns, yet the relationship between rainfall and the **Normalized Difference Vegetation Index (NDVI)** is nonlinear, delayed, and varies district by district - making it unsuitable for simple rule-based approaches.
 
-**Disaster Response Drone** turns a standard drone video feed into an intelligent, real-time operator console. It runs a **YOLOv8n** object detector with **ByteTrack** persistent tracking on a live video stream - from a webcam, an RTSP drone feed, or any IP camera URL - and maintains a **unique survivor count** that is robust to re-entries and momentary disappearances. Every identified survivor gets a persistent track ID, so the same person is never double-counted. The session is recorded, re-encoded to a browser-playable MP4, and offered for download the moment the operator stops the feed.
-
-The system is split into a **FastAPI inference backend** and a **Streamlit operator dashboard**, decoupled so the AI model runs at full speed regardless of UI rendering. A standalone `app.py` script provides a lightweight desktop mode - no server required - for single-operator field use.
+This project delivers a **complete end-to-end inference system** trained on 15 years of monthly Rwanda satellite and rainfall data (2000–2014). It goes from raw multi-district time-series data through statistical preprocessing, optimal-delay analysis, polynomial and ensemble **model selection**, and a production-grade **REST API** and **Streamlit UI** - all packaged for **Docker containerization** and deployed on **Hugging Face**.
 
 ---
 
@@ -33,106 +32,91 @@ The system is split into a **FastAPI inference backend** and a **Streamlit opera
 
 ```mermaid
 flowchart LR
-    A|"Video Source\nWebcam or Drone IP address"| --> B["backend.py\nFastAPI"]
+    A[("Rwanda rainfall\nand vegetation\n(CSV files)")] --> B["app.py"]
     B --> C["model.joblib"]
-    C --> B
-    B -->|MJPEG stream| D["frontend.py\nStreamlit UI"]
-    B -->|REST API| D
-    D -->|Download| E[("Output Video file")]
-    F["app.py"] --> A
+    C --> D["backend.py\nFastAPI"]
+    D <--> E["frontend.py\nStreamlit UI"]
+    F["Docker"] --> D
+    F --> E
+    E --> G["Hugging Face Spaces\nDeployment"]
 ```
 
 | Layer | Implementation |
 |---|---|
-| **Standalone script** | `app.py` - single-file desktop mode: captures webcam, runs YOLOv8n tracking at `conf=0.5`, draws bounding boxes, displays live count, writes `output_video.mp4`, exits on `e` or window close |
-| **Model artifact** | `model.joblib` - self-contained bundle: YOLOv8n weights bytes, ByteTrack config, detection thresholds, and image size, loaded once at backend startup |
-| **Inference backend** | `backend.py` - FastAPI service: two-thread architecture (video reader + AI detector), session management, MJPEG stream, MP4 recording, and re-encoding |
-| **Operator console** | `frontend.py` - Streamlit dashboard: single-page operator interface with live video, real-time telemetry cards, and post-session review |
+| **Training & EDA** | `app.py` - data loading, column formatting, time-series visualization, Pearson correlation, optimal-delay search, moving-average window tuning, polynomial regression, 5-fold cross-validation, and `model.joblib` export |
+| **Inference artifact** | `model.joblib` - per-district fitted models, monthly rainfall climatology, training data, CV metrics, and scaler parameters |
+| **Inference pipeline** | `backend.py` - FastAPI service: district lookup, monthly SMA computation, model dispatch, and vegetation-index response |
+| **Interactive UI** | `frontend.py` - Streamlit app: district + month selector, rainfall scenario slider, metric cards, Altair chart with historical data and trend line |
+| **Packaging & Deployment** | Single `python:3.15-slim` Docker image; Compose-orchestrated with health checks; containerized and live on **Hugging Face Spaces** |
 
----
+### Step-by-Step Methodology
 
-### Step 1 · Model Bundle: `model.joblib`
+**1. Data Loading & Time-Series Preprocessing**
 
-At first startup, `backend.py` calls `build_model()`, which downloads `yolov8n.pt` and serializes the following into `model.joblib` via `joblib.dump(..., compress=3)`:
+- Loads `Rainfall.csv` and `Vegetation.csv`, each with 30 district rows and 180 monthly columns (2000–2014).
+- Reformats raw column headers (`Jan-00` → `JAN_2000`) for consistent datetime parsing.
+- Drops the first four vegetation columns (Jan–Apr 2000), which contain no satellite readings - using `dropna(axis=1, how='all')` for a re-run-safe operation rather than a brittle positional drop.
+- Aligns both datasets to a common 176-month window (May 2000 - Dec 2014) before any correlation or modelling step.
 
-| Key | Value | Purpose |
-|---|---|---|
-| `weights_bytes` | Raw `.pt` file bytes | Self-contained - no separate weight file needed at serving time |
-| `target_classes` | `[0]` | Person class only (COCO index 0) |
-| `conf` | `0.35` | Detection confidence threshold |
-| `iou` | `0.5` | NMS IoU threshold |
-| `imgsz` | `640` (CPU: auto-lowered to `480`) | Inference image size |
-| `tracker` | `bytetrack.yaml` | ByteTrack persistent multi-object tracker |
-| `min_track_frames` | `3` | Frames a track ID must be seen before being counted as a confirmed survivor |
+**2. Exploratory Data Analysis**
 
-On subsequent starts, `model.joblib` is loaded directly - no rebuild. The weights are written to a temp file and loaded into a warm YOLO model with **three dummy-frame warm-up passes** so the first real frame is detected without delay.
+- Plots per-district time-series grids (30 subplots, 5 columns) for both rainfall and NDVI.
+- Computes monthly descriptive statistics (mean, median, min, max) aggregated across all districts and years, revealing Rwanda's bimodal rainfall calendar.
+- Fits an **Exponential Spatial Decay** function to Pearson inter-district correlations:
 
----
+$$
+\rho(d) = C_0 \, e^{-a d}
+$$
 
-### Step 2 · Two-Thread Inference Pipeline
+  Best-fit parameters: **C₀ = 0.78, a ≈ 0** - confirming high spatial coherence across Rwanda's compact geography.
 
-The core design separates **video throughput** from **AI speed**, so the live feed never lags regardless of CPU inference time.
+**3. Optimal Rainfall Delay (k)**
 
-```
-_read_loop (Thread 1)          _detect_loop (Thread 2)
-─────────────────────          ───────────────────────
-cap.read() → raw frame    →→→  model.track(latest raw frame)
-_draw(last known boxes)        update self.boxes, self.confirmed
-write annotated frame to MP4   update self.in_view, self.det_fps
-encode JPEG → self.latest
-```
+- For each integer delay **k ∈ {0 … 12}**, computes the cross-district mean Pearson correlation between rainfall lagged by k months and contemporaneous NDVI.
+- Selects **k = 1 month** as the lag that maximises average correlation - vegetation greening peaks approximately one month after peak rainfall.
 
-- **Thread 1** (`_read_loop`) reads frames from the camera at native speed, draws the most recently known bounding boxes on each frame, records to a raw MP4, and publishes the JPEG to the MJPEG stream. It sets `cap.set(CAP_PROP_BUFFERSIZE, 1)` to always use the newest available frame and never queue stale ones.
-- **Thread 2** (`_detect_loop`) picks up the newest raw frame whenever it changes, runs `model.track()` with ByteTrack persistence, and updates the shared box list and confirmed-survivor set. If no GPU is available, `imgsz` is automatically capped at 480 to reduce CPU inference time.
+**4. Optimal Moving-Average Window (n)**
 
-**Survivor counting:** a track ID is added to `confirmed` only after it appears in `min_track_frames` (3) consecutive detections, filtering one-frame ghost detections. The confirmed set is a Python `set`, so the same person re-entering the frame never increments the count.
+- For each window **n ∈ {1 … 12}**, computes a **Simple Moving Average (SMA)** of rainfall and correlates it with the aligned NDVI series.
+- Selects **n = 3 months** - a 3-month SMA balances noise reduction with temporal responsiveness, outperforming both single-month values and longer windows.
 
----
+**5. Feature Engineering & Model Comparison**
 
-### Step 3 · Recording & Re-encoding
+Three predictors are evaluated across three polynomial degrees:
 
-When the operator presses **Stop Capturing**:
-
-1. Both threads are joined with a 15-second timeout.
-2. `_finalize()` measures the real elapsed frame rate from `t_first`/`t_last` timestamps.
-3. `ffmpeg` (via `imageio-ffmpeg`) re-encodes the raw MP4 to H.264 (`libx264`, `yuv420p`, `+faststart`) at the corrected frame rate, so the file plays correctly in any browser.
-4. The raw file is deleted; only the final MP4 is kept in the OS temp directory and served for download.
-5. After the Streamlit client fetches the video, the server copy is deleted automatically - no output folder is left in the project directory.
-
----
-
-### Step 4 · REST API Endpoints (`backend.py`)
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/health` | Model status, device (CPU/CUDA), uptime, active session ID |
-| `POST` | `/session/start` | Start a new session; body: `{"source": "0"}` or a stream URL |
-| `GET` | `/session/status` | Live telemetry: in-view count, unique survivors, FPS, elapsed time |
-| `GET` | `/session/stream` | MJPEG multipart stream of annotated frames |
-| `POST` | `/session/stop` | Stop recording, finalize MP4; returns session summary |
-| `GET` | `/session/{sid}/download` | Serve the finalized MP4 for download |
-| `DELETE` | `/session/{sid}` | Discard the MP4 and clear the session |
-
----
-
-### Step 5 · Operator Dashboard (`frontend.py`)
-
-The Streamlit UI has three states that transition based on operator actions:
-
-```
-flowchart LR
-    IDLE(["IDLE"]) -->|"Begin Capturing"| LIVE(["LIVE"])
-    LIVE -->|"Stop Capturing"| REVIEW(["REVIEW"])
-    REVIEW -->|"Capture Again or Discard"| IDLE
-```
-
-| State | What the operator sees |
+| Feature | Description |
 |---|---|
-| **Idle** | System-ready badge, video source selector (webcam port or stream URL), **Begin Capturing** button |
-| **Live** | Full-width annotated video stream, four live telemetry cards (Total Survivors · In View · Video FPS · Elapsed), AI detection speed caption, **Stop Capturing** button |
-| **Review** | Session summary cards, inline video player, **Discard** (red) · **Download MP4** (blue) · **Capture Again** (green) buttons; filename is `Survivor_Detection_YYYY-MM-DD_HH-MM.mp4` |
+| Raw Rainfall | Monthly millimetres, no transformation |
+| Delayed Rainfall | Rainfall shifted by k = 1 month |
+| **SMA Rainfall** | 3-month rolling mean - **best predictor** |
 
-The telemetry panel refreshes every second via `@st.fragment(run_every=1)` without re-rendering the video frame, keeping the UI responsive. If the browser is refreshed mid-session, the UI re-attaches to the running session automatically.
+In-sample R² and RMSE are compared across Linear, Quadratic, and Cubic fits for all three features and confirmed with 5-fold **cross-validation**.
+
+**6. Cross-Validation & Model Selection**
+
+A 5-fold `KFold` cross-validation (shuffled, `random_state=42`) is run across four features and three polynomial orders. Five model architectures are benchmarked on the best feature (SMA Rainfall):
+
+| Model | CV R² | CV RMSE |
+|---|---|---|
+| Linear | 0.510 | 8.30 |
+| **Quadratic** | **0.539** | **8.07** |
+| Cubic | 0.539 | 8.09 |
+| Random Forest | 0.345 | 9.67 |
+| SVR | 0.487 | 8.60 |
+
+**Quadratic polynomial regression on 3-month SMA rainfall** is selected - highest cross-validated R² at the lowest RMSE without overfitting, and interpretable coefficients unlike ensemble methods.
+
+**7. Model Artifact Export (`model.joblib`)**
+
+A per-district model is fitted on all training data and bundled into one self-contained artifact:
+
+- `models` - 30 fitted scikit-learn pipelines (one per district)
+- `district_cv` - per-district CV R² and RMSE
+- `training_data` - historical SMA and NDVI points for chart rendering
+- `monthly_rainfall_mean / std` - 2000–2014 climatology per district × calendar month
+- `recent_rainfall` - last 3 months of observed data, used as default inference inputs
+- `model_comparison` - full benchmark table
+- `sklearn_version` - for **reproducibility** across environments
 
 ---
 
@@ -140,68 +124,47 @@ The telemetry panel refreshes every second via `@st.fragment(run_every=1)` witho
 
 | | Feature | Detail |
 |---|---|---|
-| 🎯 | **Unique survivor counting** | ByteTrack persistent IDs + 3-frame confirmation gate eliminate double-counting and ghost detections |
-| ⚡ | **Lag-free live feed** | Video reader and AI detector run on separate threads; camera buffer pinned to 1 frame so the display never shows stale video |
-| 🔌 | **Any video source** | Webcam index (0, 1, 2…), RTSP drone stream, HTTP/MJPEG IP camera, or any OpenCV-compatible URL |
-| 📦 | **Self-contained artifact** | `model.joblib` bundles YOLOv8n weights + all inference config in one file; backend serves without loose `.pt` files |
-| 🎬 | **Corrected MP4 export** | Real FPS measured from frame timestamps; `ffmpeg` re-encodes to browser-playable H.264 with correct playback speed |
-| 🗂️ | **Zero project clutter** | Recordings live in the OS temp directory and are deleted server-side after download; no `outputs/` folder in the project |
-| 🔁 | **Session resume** | Refreshing the browser mid-session re-attaches to the live feed without data loss |
-| 🩺 | **Health monitoring** | `GET /health` reports model load status, compute device, uptime, and active session for operator awareness |
-| 🖥️ | **Desktop mode** | `app.py` runs standalone with `cv2.imshow`, no server needed; saves `output_video.mp4` locally |
-| ♻️ | **Reproducibility** | All dependencies pinned in `requirements.txt`; `model.joblib` rebuilt deterministically if missing |
+| 📐 | **Optimal-lag & window search** | Data-driven selection of the 1-month rainfall delay and 3-month SMA window that maximise Pearson correlation with NDVI across all 30 districts |
+| 🧠 | **Per-district polynomial models** | A separate quadratic pipeline per district captures local rainfall–vegetation dynamics that a single pooled model would average away |
+| 🔌 | **Production REST API** | `GET /info`, `GET /districts/{district}`, `POST /predict`, `GET /predict_month` - Pydantic-validated, with range-checking and out-of-distribution warnings |
+| 🖥️ | **Interactive Streamlit UI** | Alphabetically sorted district + month selectors with "Select" placeholders, rainfall scenario slider (Much Drier → Much Wetter), metric cards, and an Altair chart shown on demand |
+| 🐳 | **One-image Docker deployment** | Same `python:3.15-slim` image runs both services; Compose wires them with a health check and service-name networking |
+| 🤗 | **Hugging Face deployment** | Deployed as a containerized Space on **Hugging Face**, providing public availability and cloud-hosted inference API endpoints |
 
 ---
 
 ## 📁 Project Structure
 
-```text
-Disaster Response Drone/
-├── app.py               # Standalone desktop script: webcam → detection → output_video.mp4
-├── backend.py           # FastAPI inference service: session management, MJPEG stream, REST API
-├── frontend.py          # Streamlit operator dashboard: idle → live → review flow
-├── model.joblib         # Serialized bundle: YOLOv8n weights, ByteTrack config, thresholds
-├── yolov8n.pt           # YOLOv8 nano weights (COCO, downloaded by ultralytics on first run)
-└── requirements.txt     # Pinned Python dependencies for reproducible setup
-```
-
 | File | Role |
 |---|---|
-| `app.py` | Lightweight field script - loads `yolov8n.pt`, opens the webcam, runs `model.track()` at `conf=0.5`, draws `Survivor (XX%)` boxes, overlays a live-count HUD, and writes every annotated frame to `output_video.mp4`. Exits cleanly on `e` keypress or window close, then prints total unique survivors. |
-| `backend.py` | FastAPI service - loads `model.joblib` at startup, runs three warm-up passes on a dummy frame, then manages one `Session` at a time. Each session spawns two threads: a video reader at camera speed and an AI detector that always processes the newest frame. Provides MJPEG streaming, session telemetry, and MP4 finalization via `ffmpeg`. |
-| `frontend.py` | Streamlit dashboard - single-page operator console with a dark drone-ops theme (Rajdhani/Inter fonts, card-based telemetry, pulsing LIVE badge). Talks to `backend.py` only via HTTP; no model imports. Downloads the annotated MP4 into browser memory and offers it for save or discard. |
-| `model.joblib` | `joblib`- compressed bundle containing YOLOv8n weight bytes, detection config (`conf=0.35`, `iou=0.5`, `imgsz=640`), ByteTrack tracker reference, `min_track_frames=3`, and bundle metadata. Rebuilt automatically on first run if absent. |
-| `yolov8n.pt` | YOLOv8 nano COCO weights - 6.2 MB, downloaded by `ultralytics` on demand. Can be replaced with domain-specific weights (VisDrone, SAR, thermal) by setting the `WEIGHTS` environment variable before starting the backend. |
-| `requirements.txt` | Twelve pinned packages (`numpy==2.5.4`, `ultralytics==8.4.211`, `torch==2.15.0`, `fastapi==0.162.5`, `streamlit==1.67.0`, etc.) for a fully deterministic build. |
+| `app.py` | 🔬 Training workflow written as `# %%` cells: EDA, Pearson correlation, lag and window optimisation, polynomial regression, 5-fold cross-validation, model comparison, and `model.joblib` export |
+| `backend.py` | 🧩 **FastAPI** inference service - district lookup, SMA computation, model dispatch, climatology-based monthly predictions, and an out-of-range warning flag |
+| `frontend.py` | 🖥️ **Streamlit** UI - district and month dropdowns, rainfall scenario slider, two metric cards with error bounds, and an Altair 3-layer chart (scatter · trend line · prediction marker) |
+| `model.joblib` | 🤖 Serialized inference bundle: 30 district pipelines, CV metrics, monthly climatology, training points, and benchmark table |
+| `Rainfall.csv` | 📊 Monthly rainfall (mm) for 30 Rwanda districts, 2000–2014 |
+| `Vegetation.csv` | 🌿 Monthly NDVI readings for 30 Rwanda districts, 2000–2014 |
+| `Dockerfile` | 🐳 `python:3.15-slim` image used for backend/frontend services and **Hugging Face Spaces** container runtime |
+| `docker-compose.yml` | 🧱 Runs backend on `:8000` and frontend on `:8501`; frontend waits on the backend's `/` health check |
+| `.dockerignore` | 🧹 Keeps training scripts and raw CSVs out of the production image |
+| `requirements.txt` | 📦 Pinned dependency versions for deterministic builds |
 
 ---
 
-## 💡 Use Cases
+## 💡 Industry Use Cases
 
-| Domain | How This System Helps |
+| Domain | How this system helps |
 |---|---|
-| 🌪️ **Natural disaster response** | Drone operators sweep earthquake or flood zones and get a live unique-survivor count without manually tallying a chaotic video feed |
-| 🔥 **Wildfire & evacuation support** | Identify people in areas cut off by fire lines; the timestamped MP4 gives incident commanders a durable record of who was spotted and when |
-| 🏔️ **Search and rescue (SAR)** | Swap in thermal or VisDrone-trained weights and connect to any RTSP stream from a SAR drone; the system works with any OpenCV-compatible source |
-| 🏗️ **Construction site safety** | Monitor restricted zones in real time; the unique-ID tracker counts how many individuals are present without counting re-entries |
-| 🎓 **Computer vision research** | The two-thread reader/detector architecture and `model.joblib` bundling pattern are reusable templates for any real-time detection system where inference speed is slower than camera frame rate |
-| 🔁 **Custom model rollout** | Replace `model.joblib` by setting `WEIGHTS` and restarting - `backend.py` and `frontend.py` require no code changes |
-
-### Natural Next Steps
-
-- **Domain-specific weights:** fine-tune on VisDrone, HERIDAL, or a thermal-imagery SAR dataset to improve detection at altitude and in low-light conditions.
-- **Multi-drone sessions:** extend the session model to handle simultaneous feeds from multiple drones, with a merged unique-ID count across all streams.
-- **GPS coordinate overlay:** fuse drone telemetry with detection bounding boxes to log survivor GPS coordinates alongside the video for handoff to ground teams.
-- **Automated alert:** add a webhook or SMS trigger when the unique survivor count crosses a threshold, so the operator does not need to watch the screen continuously.
-- **Cloud deployment:** run `backend.py` on a GPU-equipped cloud VM, set `PUBLIC_API_URL` to the server's public IP, and open the Streamlit UI from any device in the field.
+| 🌾 **Agricultural planning** | Extension officers can query any of Rwanda's 30 districts and calendar months to anticipate vegetation stress before it becomes visible in the field, supporting timely irrigation or input decisions |
+| 🚨 **Drought early warning** | The rainfall scenario slider lets analysts model a 20-40% rainfall deficit and see the predicted NDVI drop before the dry season arrives, giving humanitarian planners a quantified lead time |
+| 📡 **Remote-sensing analytics platforms** | The `/predict_month` REST endpoint can be called in a data pipeline that ingests satellite precipitation products (CHIRPS, GPM), replacing the climatology average with a real-time observed value |
+| 🔁 **Template for other NDVI regions** | The pipeline - SMA **feature engineering** → per-site polynomial regression → per-site CV → REST API → Streamlit UI - transfers directly to any country with district-level NDVI and rainfall time series |
 
 ---
 
-## 📄 License & Acknowledgements
+## 📜 License & Acknowledgements
 
-Released under the **MIT License** (add a `LICENSE` file and update the author name and year).
+Released under the [MIT License](LICENSE).
 
-**Model:** [YOLOv8n](https://github.com/ultralytics/ultralytics) - Ultralytics, trained on [COCO](https://cocodataset.org/).
-**Tracker:** ByteTrack, integrated via `ultralytics` and `lapx==0.13.1`.
+**Data:** Rwanda district-level rainfall and NDVI data from satellite remote-sensing archives (2000–2014).
 
-Built with [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) · [FastAPI](https://fastapi.tiangolo.com) · [Streamlit](https://streamlit.io) · [OpenCV](https://opencv.org) · [PyTorch](https://pytorch.org) · [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg)
+Built with [scikit-learn](https://scikit-learn.org), [SciPy](https://scipy.org), [FastAPI](https://fastapi.tiangolo.com), [Streamlit](https://streamlit.io), [Altair](https://altair-viz.github.io), [Docker](https://www.docker.com), and deployed on [Hugging Face](https://huggingface.co).
