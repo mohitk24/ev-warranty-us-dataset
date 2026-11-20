@@ -1,3 +1,5 @@
+<div align="center">
+
 # 🩺 Maternal Mortality Ratio Predictor
 
 End-to-end public health ML pipeline - from longitudinal WHO/UNDP data to a risk-assessment API
@@ -11,11 +13,17 @@ End-to-end public health ML pipeline - from longitudinal WHO/UNDP data to a risk
 
 [Overview](#overview) [How It Works](#how-it-works) [Key Features](#key-features) [Project Structure](#project-structure) [Use Cases](#use-cases)
 
+</div>
+
+---
+
 ## 📖 Overview
 
 Maternal mortality remains one of the most preventable public health crises of our time, yet the data that could drive targeted policy interventions - spanning 195 countries from 1990 to 2021 - is rarely distilled into actionable risk signals. Identifying which regions are at highest risk, and how that risk evolves with demographic and development trajectories, requires a pipeline that moves beyond summary statistics to **predictive, longitudinal modeling**.
 
 This project builds a **complete end-to-end machine learning system** trained on WHO and UNDP data. It goes from raw wide-format country-year records through imputation, feature engineering, gradient-boosted regression with cross-validated hyperparameter tuning, and a production-grade **REST API** and **Streamlit dashboard** - all packaged for deployable on **Hugging Face Spaces**.
+
+---
 
 ## 🧠 How It Works
 
@@ -77,7 +85,6 @@ A **LightGBM** regressor is selected for its strong performance on tabular data 
 
 ### Step 5 · Model Evaluation
 
-```
 <table width="100%">
   <tr>
     <td align="center" width="25%">
@@ -98,9 +105,6 @@ A **LightGBM** regressor is selected for its strong performance on tabular data 
     </td>
   </tr>
 </table>
-```
-
-💡 Test metrics are stored inside `model.joblib` and exposed live through the `/model-info` endpoint, so the dashboard and API always reflect the actual trained model rather than documented estimates.
 
 Permutation importance and MDI feature importance are both computed and plotted during training. **HDI Rank (2021)** dominates both importance measures - a country's developmental standing in 2021 is the strongest single predictor of its historical and projected MMR, even after controlling for year and regional categories.
 
@@ -128,6 +132,8 @@ All inference-time dependencies are serialized into a single self-contained bund
 - `best_params` - winning hyperparameter configuration from RandomizedSearchCV
 - `test_metrics` - RMSE, MAE, R² on the held-out test partition
 
+---
+
 ## ⚡ Key Features
 
 |  | Feature | Detail |
@@ -141,6 +147,8 @@ All inference-time dependencies are serialized into a single self-contained bund
 | 📊 | **12 EDA Visualizations** | Global trend, continent trends, HDG and UNDP boxplots, KDE distributions, top/bottom-country rankings, correlation heatmap, feature importance, actual vs. predicted, and residuals |
 | 🏷️ | **5-Tier Risk Labeling** | Every prediction returns a human-readable risk category alongside the numeric MMR estimate - suitable for direct integration into policy dashboards and triage workflows |
 | ♻️ | **Reproducibility** | `random_state=42` throughout; all encoders, scaler, and best params stored in `model.joblib`; `requirements.txt` pinnable for deterministic builds |
+
+---
 
 ## 📁 Project Structure
 
@@ -168,34 +176,8 @@ Maternal Mortality Ratio Predictor/\
 | `10_Choropleth.html` | 🗺️ Animated Plotly choropleth - MMR by country across all 32 years; self-contained HTML, opens in any browser (4.7 MB) |
 | `11_Scatter_HDI.html` | 📈 Plotly scatter of 2021 MMR vs HDI Rank, colored by continent; interactive hover with country labels (4.6 MB) |
 | `requirements.txt` | 📦 Python dependencies across data, ML, API, and UI layers |
-| `Dockerfile` | 🐳 Slim Python image running both backend and frontend services |
-| `docker-compose.yml` | 🧱 Runs backend on `:8000` and frontend on `:8501`; frontend waits on the backend health check |
 
-## 🔌 API Reference
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/` | Health check - confirms the API is running |
-| `POST` | `/predict` | Single prediction - returns `predicted_mmr`, `risk_label`, and input echo |
-| `POST` | `/predict-batch` | Batch prediction - accepts a list of request objects, returns a list of prediction dicts |
-| `GET` | `/model-info` | Model metadata - feature columns, test metrics (RMSE, MAE, R²), and best hyperparameters |
-
-#### Request Schema - `POST /predict`
-
-```
-{
-  "continent":              "Africa" | "Asia" | "Europe" | "North America" | "South America",
-  "hemisphere":             "Northern" | "Southern",
-  "human_development_group":"Low" | "Medium" | "High" | "Very High",
-  "undp_region":            "Sub-Saharan Africa" | "South Asia" | "Arab States" |
-                            "Latin America and the Caribbean" | "East Asia and the Pacific" |
-                            "Europe and Central Asia",
-  "year":                   1990 – 2030,
-  "hdi_rank":               1 – 200
-}
-```
-
-💡 The `year` field accepts values up to 2030, enabling scenario simulation and forward-looking policy planning beyond the 2021 training window.
+---
 
 ## 💡 Use Cases & Future Extensions
 
@@ -217,6 +199,8 @@ Maternal Mortality Ratio Predictor/\
 - **Geospatial confidence intervals:** add prediction-interval estimation (quantile regression or conformal prediction) to surface not just the point estimate but the uncertainty range - critical for policy decisions in data-sparse regions.
 - **Sub-national resolution:** extend the data pipeline to ingest IHME sub-national MMR estimates and add a province or state-level feature, enabling finer-grained within-country risk mapping.
 - **REST API integration with DHIS2:** wire the `/predict-batch` endpoint into existing national health information systems (such as DHIS2) to surface risk labels directly in operational dashboards without requiring a standalone UI deployment.
+
+---
 
 ## 📜 License & Acknowledgements
 
