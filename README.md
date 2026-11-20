@@ -1,30 +1,21 @@
-<div align="center">
+# 🩺 Maternal Mortality Ratio Predictor
 
-# 🌿 Rainfall Vegetation Predictor
+End-to-end public health ML pipeline - from longitudinal WHO/UNDP data to a risk-assessment API
 
-### End-to-end vegetation forecasting - from Rwanda district rainfall to a containerized inference API
-
-![Python](https://img.shields.io/badge/Python-3.15-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![LightGBM](https://img.shields.io/badge/LightGBM-Regressor-02569B?logo=lightgbm&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9.1-F7931E?logo=scikitlearn&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?logo=docker&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.165.0-009688?logo=fastapi&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.67.0-FF4B4B?logo=streamlit&logoColor=white)
 ![Hugging Face](https://img.shields.io/badge/Hugging%20Face-Deployed-FFD21E?logo=huggingface&logoColor=black)
-![Altair](https://img.shields.io/badge/Altair-Interactive%20Charts-blue)
 
-[Overview](#-overview) · [How It Works](#-how-it-works) · [Key Features](#-key-features) · [Project Structure](#-project-structure) · [Use Cases](#-industry-use-cases)
-
-</div>
-
----
+[Overview](#overview) [How It Works](#how-it-works) [Key Features](#key-features) [Project Structure](#project-structure) [Use Cases](#use-cases)
 
 ## 📖 Overview
 
-In rainfall-dependent agricultural regions, understanding how precipitation translates into vegetation health is critical for crop planning, drought response, and resource allocation. Rwanda's 30 districts each exhibit distinct seasonal patterns, yet the relationship between rainfall and the **Normalized Difference Vegetation Index (NDVI)** is nonlinear, delayed, and varies district by district - making it unsuitable for simple rule-based approaches.
+Maternal mortality remains one of the most preventable public health crises of our time, yet the data that could drive targeted policy interventions - spanning 195 countries from 1990 to 2021 - is rarely distilled into actionable risk signals. Identifying which regions are at highest risk, and how that risk evolves with demographic and development trajectories, requires a pipeline that moves beyond summary statistics to **predictive, longitudinal modeling**.
 
-This project delivers a **complete end-to-end inference system** trained on 15 years of monthly Rwanda satellite and rainfall data (2000–2014). It goes from raw multi-district time-series data through statistical preprocessing, optimal-delay analysis, polynomial and ensemble **model selection**, and a production-grade **REST API** and **Streamlit UI** - all packaged for **Docker containerization** and deployed on **Hugging Face**.
-
----
+This project builds a **complete end-to-end machine learning system** trained on WHO and UNDP data. It goes from raw wide-format country-year records through imputation, feature engineering, gradient-boosted regression with cross-validated hyperparameter tuning, and a production-grade **REST API** and **Streamlit dashboard** - all packaged for deployable on **Hugging Face Spaces**.
 
 ## 🧠 How It Works
 
@@ -32,139 +23,200 @@ This project delivers a **complete end-to-end inference system** trained on 15 y
 
 ```mermaid
 flowchart LR
-    A[("Rwanda rainfall\nand vegetation\n(CSV files)")] --> B["app.py"]
+    A[("WHO/UNDP Data\n(CSV file)")] --> B["app.py"]
     B --> C["model.joblib"]
     C --> D["backend.py\nFastAPI"]
     D <--> E["frontend.py\nStreamlit UI"]
-    F["Docker"] --> D
-    F --> E
-    E --> G["Hugging Face Spaces\nDeployment"]
+    E --> F["Hugging Face\nDeployment"]
 ```
 
 | Layer | Implementation |
-|---|---|
-| **Training & EDA** | `app.py` - data loading, column formatting, time-series visualization, Pearson correlation, optimal-delay search, moving-average window tuning, polynomial regression, 5-fold cross-validation, and `model.joblib` export |
-| **Inference artifact** | `model.joblib` - per-district fitted models, monthly rainfall climatology, training data, CV metrics, and scaler parameters |
-| **Inference pipeline** | `backend.py` - FastAPI service: district lookup, monthly SMA computation, model dispatch, and vegetation-index response |
-| **Interactive UI** | `frontend.py` - Streamlit app: district + month selector, rainfall scenario slider, metric cards, Altair chart with historical data and trend line |
-| **Packaging & Deployment** | Single `python:3.15-slim` Docker image; Compose-orchestrated with health checks; containerized and live on **Hugging Face Spaces** |
+| --- | --- |
+| **Training & EDA** | `app.py` - data loading, wide→long reshape, missing-value imputation, feature engineering, log₁₀ target transformation, LightGBM training, RandomizedSearchCV hyperparameter tuning, and `model.joblib` export |
+| **Inference artifact** | `model.joblib` - fitted LightGBM model, feature column list, label encoders, interaction encoder, scaler, best hyperparameters, and test-set metrics |
+| **Inference pipeline** | `backend.py` - FastAPI service: Pydantic-validated single and batch prediction endpoints, feature construction, back-transformation from log₁₀ scale, and risk label assignment |
+| **Interactive UI** | `frontend.py` - Streamlit app: single prediction with Plotly gauge, year-sweep trend chart, and batch CSV upload with animated choropleth |
+| **Packaging & Deployment** | Compose-orchestrated with health checks; deployable to **Hugging Face Spaces** |
 
-### Step-by-Step Methodology
+### Step 1 · Data Pipeline & Imputation
 
-**1. Data Loading & Time-Series Preprocessing**
+The raw dataset (`Maternal_Mortality.csv`) covers **195 countries** with MMR values for each year from 1990 to 2021, alongside static metadata: continent, hemisphere, Human Development Group (HDG), UNDP Developing Region, and HDI Rank (2021). It arrives in wide format and is reshaped to long form before cleaning.
 
-- Loads `Rainfall.csv` and `Vegetation.csv`, each with 30 district rows and 180 monthly columns (2000–2014).
-- Reformats raw column headers (`Jan-00` → `JAN_2000`) for consistent datetime parsing.
-- Drops the first four vegetation columns (Jan–Apr 2000), which contain no satellite readings - using `dropna(axis=1, how='all')` for a re-run-safe operation rather than a brittle positional drop.
-- Aligns both datasets to a common 176-month window (May 2000 - Dec 2014) before any correlation or modelling step.
+- **MMR**: imputed with the continent-year median to preserve regional temporal trends.
+- **UNDP Region**: imputed with the group mode (by continent × HDG) to respect categorical structure.
+- **HDI Rank**: imputed with the group mean (by continent × HDG) using a continuous approximation.
 
-**2. Exploratory Data Analysis**
+### Step 2 · Feature Engineering
 
-- Plots per-district time-series grids (30 subplots, 5 columns) for both rainfall and NDVI.
-- Computes monthly descriptive statistics (mean, median, min, max) aggregated across all districts and years, revealing Rwanda's bimodal rainfall calendar.
-- Fits an **Exponential Spatial Decay** function to Pearson inter-district correlations:
+Four categorical columns are **label-encoded** before model training (continent, hemisphere, human development group, UNDP region). Four derived numeric features are then constructed to give the model richer temporal and distributional signal:
 
-$$
-\rho(d) = C_0 \, e^{-a d}
-$$
+| Feature | Formula / Source | Purpose |
+| --- | --- | --- |
+| `decade` | `year // 10 * 10` | Captures decade-level policy and infrastructure shifts |
+| `years_elapsed` | `year − 1990` | Encodes time since the start of the observation window |
+| `hdi_quintile` | `pd.qcut(HDI Rank, 5)` | Bins countries into development tiers for nonlinear HDI effects |
+| `continent_hdg_enc` | LabelEncoder on `continent + "_" + HDG` | Captures interaction effects between geography and development group |
 
-  Best-fit parameters: **C₀ = 0.78, a ≈ 0** - confirming high spatial coherence across Rwanda's compact geography.
+### Step 3 · Log₁₀ Target Transformation
 
-**3. Optimal Rainfall Delay (k)**
+MMR values are right-skewed across four orders of magnitude - from under 2 to over 2,000 maternal deaths per 100,000 live births. The model trains on **`log₁₀(MMR)`** and predictions are back-transformed with `10^ŷ` before being returned to callers. This normalization materially improves gradient boosting performance on this distribution without requiring outlier removal.
 
-- For each integer delay **k ∈ {0 … 12}**, computes the cross-district mean Pearson correlation between rainfall lagged by k months and contemporaneous NDVI.
-- Selects **k = 1 month** as the lag that maximises average correlation - vegetation greening peaks approximately one month after peak rainfall.
+### Step 4 · Model Training & Hyperparameter Tuning
 
-**4. Optimal Moving-Average Window (n)**
+A **LightGBM** regressor is selected for its strong performance on tabular data with mixed categorical and numeric features, its native handling of missing values, and its training speed at this dataset scale.
 
-- For each window **n ∈ {1 … 12}**, computes a **Simple Moving Average (SMA)** of rainfall and correlates it with the aligned NDVI series.
-- Selects **n = 3 months** - a 3-month SMA balances noise reduction with temporal responsiveness, outperforming both single-month values and longer windows.
+| Setting | Value |
+| --- | --- |
+| Algorithm | LightGBM Gradient Boosted Regression Trees |
+| Target | `log₁₀(MMR)` (back-transformed at inference) |
+| Cross-validation | 10-fold KFold, `random_state=42` |
+| Search strategy | RandomizedSearchCV, 30 iterations |
+| Scoring | Negative Root Mean Squared Error |
+| Hyperparameter grid | `n_estimators`, `learning_rate`, `max_depth`, `num_leaves`, `min_child_samples`, `subsample`, `colsample_bytree` |
+| Feature columns (10) | Encoded categoricals + Year + HDI Rank + decade + years_elapsed + hdi_quintile + continent_hdg_enc |
 
-**5. Feature Engineering & Model Comparison**
+### Step 5 · Model Evaluation
 
-Three predictors are evaluated across three polynomial degrees:
+R²
 
-| Feature | Description |
-|---|---|
-| Raw Rainfall | Monthly millimetres, no transformation |
-| Delayed Rainfall | Rainfall shifted by k = 1 month |
-| **SMA Rainfall** | 3-month rolling mean - **best predictor** |
+Coefficient of Determination
 
-In-sample R² and RMSE are compared across Linear, Quadratic, and Cubic fits for all three features and confirmed with 5-fold **cross-validation**.
+RMSE
 
-**6. Cross-Validation & Model Selection**
+Root Mean Squared Error
 
-A 5-fold `KFold` cross-validation (shuffled, `random_state=42`) is run across four features and three polynomial orders. Five model architectures are benchmarked on the best feature (SMA Rainfall):
+MAE
 
-| Model | CV R² | CV RMSE |
-|---|---|---|
-| Linear | 0.510 | 8.30 |
-| **Quadratic** | **0.539** | **8.07** |
-| Cubic | 0.539 | 8.09 |
-| Random Forest | 0.345 | 9.67 |
-| SVR | 0.487 | 8.60 |
+Mean Absolute Error
 
-**Quadratic polynomial regression on 3-month SMA rainfall** is selected - highest cross-validated R² at the lowest RMSE without overfitting, and interpretable coefficients unlike ensemble methods.
+10-fold
 
-**7. Model Artifact Export (`model.joblib`)**
+Cross-Validation
 
-A per-district model is fitted on all training data and bundled into one self-contained artifact:
+💡 Test metrics are stored inside `model.joblib` and exposed live through the `/model-info` endpoint, so the dashboard and API always reflect the actual trained model rather than documented estimates.
 
-- `models` - 30 fitted scikit-learn pipelines (one per district)
-- `district_cv` - per-district CV R² and RMSE
-- `training_data` - historical SMA and NDVI points for chart rendering
-- `monthly_rainfall_mean / std` - 2000–2014 climatology per district × calendar month
-- `recent_rainfall` - last 3 months of observed data, used as default inference inputs
-- `model_comparison` - full benchmark table
-- `sklearn_version` - for **reproducibility** across environments
+Permutation importance and MDI feature importance are both computed and plotted during training. **HDI Rank (2021)** dominates both importance measures - a country's developmental standing in 2021 is the strongest single predictor of its historical and projected MMR, even after controlling for year and regional categories.
 
----
+### Step 6 · Risk Labeling
+
+Every prediction is assigned a human-readable risk tier based on the back-transformed MMR value:
+
+| Risk Label | MMR Range (deaths per 100,000 live births) |
+| --- | --- |
+| Very Low | \< 20 |
+| Low | 20 – 99 |
+| Medium | 100 – 299 |
+| High | 300 – 699 |
+| Very High | ≥ 700 |
+
+### Step 7 · Model Artifact Export (`model.joblib`)
+
+All inference-time dependencies are serialized into a single self-contained bundle via `joblib.dump`:
+
+- `model` - fitted LightGBM pipeline (best estimator from RandomizedSearchCV)
+- `feature_cols` - ordered list of the 10 training features
+- `label_encoders` - per-column LabelEncoders for the 4 categorical variables
+- `le_interaction` - LabelEncoder for the `continent_hdg_enc` interaction string
+- `scaler` - StandardScaler fitted on training features (available for scaled inference)
+- `best_params` - winning hyperparameter configuration from RandomizedSearchCV
+- `test_metrics` - RMSE, MAE, R² on the held-out test partition
 
 ## ⚡ Key Features
 
-| | Feature | Detail |
-|---|---|---|
-| 📐 | **Optimal-lag & window search** | Data-driven selection of the 1-month rainfall delay and 3-month SMA window that maximise Pearson correlation with NDVI across all 30 districts |
-| 🧠 | **Per-district polynomial models** | A separate quadratic pipeline per district captures local rainfall–vegetation dynamics that a single pooled model would average away |
-| 🔌 | **Production REST API** | `GET /info`, `GET /districts/{district}`, `POST /predict`, `GET /predict_month` - Pydantic-validated, with range-checking and out-of-distribution warnings |
-| 🖥️ | **Interactive Streamlit UI** | Alphabetically sorted district + month selectors with "Select" placeholders, rainfall scenario slider (Much Drier → Much Wetter), metric cards, and an Altair chart shown on demand |
-| 🐳 | **One-image Docker deployment** | Same `python:3.15-slim` image runs both services; Compose wires them with a health check and service-name networking |
-| 🤗 | **Hugging Face deployment** | Deployed as a containerized Space on **Hugging Face**, providing public availability and cloud-hosted inference API endpoints |
-
----
+|  | Feature | Detail |
+| --- | --- | --- |
+| 🧠 | **LightGBM Regression Pipeline** | Gradient-boosted model trained on `log₁₀(MMR)`; predictions back-transformed at inference; handles mixed categorical and numeric features natively |
+| 🔬 | **Longitudinal Feature Engineering** | Decade, years-elapsed, HDI quintile (data-driven qcut), and continent × development-group interaction term - all computed from raw inputs at both train and inference time |
+| 📐 | **10-fold Cross-Validated Tuning** | RandomizedSearchCV over 30 configurations; KFold preserves temporal structure; best estimator and hyperparameters persisted in the model bundle |
+| 🔌 | **Production REST API** | `POST /predict`, `POST /predict-batch`, `GET /model-info` - Pydantic-validated with Literal-typed categoricals, year range 1990–2030, and HDI rank 1–200 |
+| 🖥️ | **Interactive Streamlit Dashboard** | Three tabs: single prediction with Plotly gauge, year-sweep line chart for scenario simulation, and batch CSV upload with animated choropleth and bar chart |
+| 🗺️ | **Animated Choropleth** | Plotly-rendered world map of MMR by country for every year 1990–2021 - included as `10_Choropleth.html` |
+| 📊 | **12 EDA Visualizations** | Global trend, continent trends, HDG and UNDP boxplots, KDE distributions, top/bottom-country rankings, correlation heatmap, feature importance, actual vs. predicted, and residuals |
+| 🏷️ | **5-Tier Risk Labeling** | Every prediction returns a human-readable risk category alongside the numeric MMR estimate - suitable for direct integration into policy dashboards and triage workflows |
+| ♻️ | **Reproducibility** | `random_state=42` throughout; all encoders, scaler, and best params stored in `model.joblib`; `requirements.txt` pinnable for deterministic builds |
 
 ## 📁 Project Structure
 
+Maternal Mortality Ratio Predictor/\
+├── app.py # Training pipeline: EDA → feature engineering → tuning → export\
+├── backend.py # FastAPI inference service\
+├── frontend.py # Streamlit dashboard (3 tabs)\
+├── model.joblib # Serialized inference bundle (1.8 MB)\
+├── Maternal_Mortality.csv # Source dataset - 195 countries, 1990–2021\
+├── requirements.txt # Python dependencies\
+├── Dockerfile # Container image definition\
+├── docker-compose.yml # Backend + frontend orchestration with health check\
+├── .dockerignore # Keeps training scripts and CSVs out of the image\
+├── 10_Choropleth.html # Animated Plotly choropleth - MMR by country 1990–2021\
+├── 11_Scatter_HDI.html # 2021 MMR vs HDI Rank scatter, colored by continent\
+└── output/ # 12 static EDA and evaluation PNGs\
+
 | File | Role |
-|---|---|
-| `app.py` | 🔬 Training workflow written as `# %%` cells: EDA, Pearson correlation, lag and window optimisation, polynomial regression, 5-fold cross-validation, model comparison, and `model.joblib` export |
-| `backend.py` | 🧩 **FastAPI** inference service - district lookup, SMA computation, model dispatch, climatology-based monthly predictions, and an out-of-range warning flag |
-| `frontend.py` | 🖥️ **Streamlit** UI - district and month dropdowns, rainfall scenario slider, two metric cards with error bounds, and an Altair 3-layer chart (scatter · trend line · prediction marker) |
-| `model.joblib` | 🤖 Serialized inference bundle: 30 district pipelines, CV metrics, monthly climatology, training points, and benchmark table |
-| `Rainfall.csv` | 📊 Monthly rainfall (mm) for 30 Rwanda districts, 2000–2014 |
-| `Vegetation.csv` | 🌿 Monthly NDVI readings for 30 Rwanda districts, 2000–2014 |
-| `Dockerfile` | 🐳 `python:3.15-slim` image used for backend/frontend services and **Hugging Face Spaces** container runtime |
-| `docker-compose.yml` | 🧱 Runs backend on `:8000` and frontend on `:8501`; frontend waits on the backend's `/` health check |
-| `.dockerignore` | 🧹 Keeps training scripts and raw CSVs out of the production image |
-| `requirements.txt` | 📦 Pinned dependency versions for deterministic builds |
+| --- | --- |
+| `app.py` | 🔬 End-to-end training: data loading, wide→long reshape, continent-median MMR imputation, group-mode UNDP imputation, group-mean HDI imputation, label encoding, interaction feature construction, log₁₀ target, RandomizedSearchCV with 10-fold KFold, model evaluation, 12 EDA plots, 2 interactive HTML exports, and `model.joblib` serialization |
+| `backend.py` | 🧩 **FastAPI** inference service - loads `model.joblib` at startup; `POST /predict` for single Pydantic-validated requests; `POST /predict-batch` for lists; `GET /model-info` for feature list, test metrics, and best hyperparameters; CORS middleware enabled |
+| `frontend.py` | 🖥️ **Streamlit** dashboard - Tab 1: 3-column selectboxes + HDI slider, Plotly gauge (0–2000 range) with risk label; Tab 2: year-range sweep → Plotly line chart + dataframe; Tab 3: CSV upload → batch predictions → bar chart + download button |
+| `model.joblib` | 🤖 Serialized bundle: LightGBM best estimator, `feature_cols`, 4 label encoders, interaction encoder, StandardScaler, `best_params`, and `test_metrics` |
+| `Maternal_Mortality.csv` | 📊 Source dataset - 195 countries; columns: ISO3, Country, Continent, Hemisphere, Human Development Groups, UNDP Developing Regions, HDI Rank (2021), MMR for each year 1990–2021 |
+| `10_Choropleth.html` | 🗺️ Animated Plotly choropleth - MMR by country across all 32 years; self-contained HTML, opens in any browser (4.7 MB) |
+| `11_Scatter_HDI.html` | 📈 Plotly scatter of 2021 MMR vs HDI Rank, colored by continent; interactive hover with country labels (4.6 MB) |
+| `requirements.txt` | 📦 Python dependencies across data, ML, API, and UI layers |
+| `Dockerfile` | 🐳 Slim Python image running both backend and frontend services |
+| `docker-compose.yml` | 🧱 Runs backend on `:8000` and frontend on `:8501`; frontend waits on the backend health check |
 
----
+## 🔌 API Reference
 
-## 💡 Industry Use Cases
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/` | Health check - confirms the API is running |
+| `POST` | `/predict` | Single prediction - returns `predicted_mmr`, `risk_label`, and input echo |
+| `POST` | `/predict-batch` | Batch prediction - accepts a list of request objects, returns a list of prediction dicts |
+| `GET` | `/model-info` | Model metadata - feature columns, test metrics (RMSE, MAE, R²), and best hyperparameters |
 
-| Domain | How this system helps |
-|---|---|
-| 🌾 **Agricultural planning** | Extension officers can query any of Rwanda's 30 districts and calendar months to anticipate vegetation stress before it becomes visible in the field, supporting timely irrigation or input decisions |
-| 🚨 **Drought early warning** | The rainfall scenario slider lets analysts model a 20-40% rainfall deficit and see the predicted NDVI drop before the dry season arrives, giving humanitarian planners a quantified lead time |
-| 📡 **Remote-sensing analytics platforms** | The `/predict_month` REST endpoint can be called in a data pipeline that ingests satellite precipitation products (CHIRPS, GPM), replacing the climatology average with a real-time observed value |
-| 🔁 **Template for other NDVI regions** | The pipeline - SMA **feature engineering** → per-site polynomial regression → per-site CV → REST API → Streamlit UI - transfers directly to any country with district-level NDVI and rainfall time series |
+#### Request Schema - `POST /predict`
 
----
+```
+{
+  "continent":              "Africa" | "Asia" | "Europe" | "North America" | "South America",
+  "hemisphere":             "Northern" | "Southern",
+  "human_development_group":"Low" | "Medium" | "High" | "Very High",
+  "undp_region":            "Sub-Saharan Africa" | "South Asia" | "Arab States" |
+                            "Latin America and the Caribbean" | "East Asia and the Pacific" |
+                            "Europe and Central Asia",
+  "year":                   1990 – 2030,
+  "hdi_rank":               1 – 200
+}
+```
+
+💡 The `year` field accepts values up to 2030, enabling scenario simulation and forward-looking policy planning beyond the 2021 training window.
+
+## 💡 Use Cases & Future Extensions
+
+### Applications
+
+| Domain | How This System Helps |
+| --- | --- |
+| 🏥 **Health Policy Planning** | Query any country profile across any year - including projected years - to benchmark current risk against comparable nations and model the trajectory under different development scenarios |
+| 🌍 **Regional Risk Profiling** | The year-sweep tab surfaces which regions are improving fastest and which are stagnating, giving international health organizations a prioritization framework for resource deployment |
+| 💰 **Resource Allocation** | The 5-tier risk label enables rules-based triage: flag Very High and High regions for intensive intervention, monitor Medium regions for regression, and track progress in Low and Very Low regions |
+| 📋 **Predictive Risk Auditing** | Upload a batch CSV of country-year combinations via the dashboard to generate a full risk report - suitable for pre-meeting briefings, donor reports, and program evaluations |
+| 🔬 **Epidemiological Research** | The `/model-info` endpoint exposes feature importances and test metrics for external validation; the interactive scatter plot pairs MMR directly against HDI Rank for regression and outlier analysis |
+
+### Natural Next Steps
+
+- **Portable model loading:** replace the hardcoded `model_path` in `backend.py` and `app.py` with an environment variable or relative path so the bundle loads correctly on any machine or in any container.
+- **Scaled inference consistency:** apply the fitted `StandardScaler` to features at inference time (currently available in the bundle but not applied by `backend.py`), ensuring the inference pipeline matches the training pipeline exactly.
+- **Streaming retraining:** wrap `app.py` in a CI/CD trigger that re-runs training when WHO or UNDP releases updated data, checks RMSE against the baseline in the existing bundle, and auto-promotes only on improvement.
+- **Geospatial confidence intervals:** add prediction-interval estimation (quantile regression or conformal prediction) to surface not just the point estimate but the uncertainty range - critical for policy decisions in data-sparse regions.
+- **Sub-national resolution:** extend the data pipeline to ingest IHME sub-national MMR estimates and add a province or state-level feature, enabling finer-grained within-country risk mapping.
+- **REST API integration with DHIS2:** wire the `/predict-batch` endpoint into existing national health information systems (such as DHIS2) to surface risk labels directly in operational dashboards without requiring a standalone UI deployment.
 
 ## 📜 License & Acknowledgements
 
 Released under the [MIT License](LICENSE).
 
-**Data:** Rwanda district-level rainfall and NDVI data from satellite remote-sensing archives (2000–2014).
+**Data:** Maternal mortality ratio data sourced from the [World Health Organization Global Health Observatory](https://www.who.int/data/gho/data/themes/maternal-and-reproductive-health) and the [United Nations Development Programme Human Development Reports](https://hdr.undp.org/data-center/human-development-index), covering 195 countries from 1990 to 2021.
 
-Built with [scikit-learn](https://scikit-learn.org), [SciPy](https://scipy.org), [FastAPI](https://fastapi.tiangolo.com), [Streamlit](https://streamlit.io), [Altair](https://altair-viz.github.io), [Docker](https://www.docker.com), and deployed on [Hugging Face](https://huggingface.co).
+⚠️ **Policy disclaimer:** MMR predictions are model estimates derived from longitudinal demographic and development data. They are intended to support, not replace, expert public health judgment. Country-specific factors - conflict, healthcare infrastructure, data-reporting quality - may cause individual predictions to diverge from observed values. Always verify against primary data sources before making operational decisions.
+
+Built with [LightGBM](https://lightgbm.readthedocs.io) · [scikit-learn](https://scikit-learn.org) · [Pandas](https://pandas.pydata.org) · [NumPy](https://numpy.org) · [Plotly](https://plotly.com/python/) · [FastAPI](https://fastapi.tiangolo.com) · [Streamlit](https://streamlit.io) · [Docker](https://www.docker.com) · [Hugging Face](https://huggingface.co)
