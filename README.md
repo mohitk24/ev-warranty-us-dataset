@@ -104,7 +104,6 @@ Permutation importance and MDI feature importance are both computed and plotted 
 
 ### Step 6 · Risk Labeling
 
-```
 Every prediction is assigned a human-readable risk tier based on the back-transformed MMR value:
 
 | Risk Label | MMR Range (deaths per 100,000 live births) |
@@ -114,7 +113,6 @@ Every prediction is assigned a human-readable risk tier based on the back-transf
 | ![Medium](https://img.shields.io/badge/Medium-3b2606?style=for-the-badge&labelColor=3b2606&color=fbbf24) | `100 – 299` |
 | ![High](https://img.shields.io/badge/High-3d1908?style=for-the-badge&labelColor=3d1908&color=fb923c) | `300 – 699` |
 | ![Very High](https://img.shields.io/badge/Very%20High-3b0d11?style=for-the-badge&labelColor=3b0d11&color=f87171) | `≥ 700` |
-```
 
 ### Step 7 · Model Artifact Export (`model.joblib`)
 
