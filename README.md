@@ -120,7 +120,7 @@ When the operator presses **Stop Capturing**:
 
 The Streamlit UI has three states that transition based on operator actions:
 
-```
+```mermaid
 flowchart LR
     IDLE(["IDLE"]) -->|"Begin Capturing"| LIVE(["LIVE"])
     LIVE -->|"Stop Capturing"| REVIEW(["REVIEW"])
